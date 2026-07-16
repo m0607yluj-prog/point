@@ -62,13 +62,17 @@ async function loadChildren() {
   populateAdhocChildSelect(children);
 }
 
+const CHILD_TARGET_SELECT_IDS = ['new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child'];
+
 function populateAdhocChildSelect(children) {
-  const select = document.getElementById('new-adhoc-chore-child');
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = '<option value="">誰でもOK</option>' +
-    children.map((c) => `<option value="${c.id}">${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
-  select.value = current;
+  CHILD_TARGET_SELECT_IDS.forEach((id) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">誰でもOK</option>' +
+      children.map((c) => `<option value="${c.id}">${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
+    select.value = current;
+  });
 }
 
 async function addChild() {
@@ -119,7 +123,10 @@ async function addQuestion() {
   const type = document.getElementById('q-type').value;
   const question = document.getElementById('q-question').value;
   const points = document.getElementById('q-points').value;
-  const payload = { type, question, points };
+  const dueAt = document.getElementById('q-due-at').value;
+  const latePenalty = document.getElementById('q-late-penalty').value;
+  const assignedChildId = document.getElementById('q-assigned-child').value;
+  const payload = { type, question, points, dueAt: dueAt || null, latePenalty, assignedChildId: assignedChildId || null };
 
   if (type === 'choice') {
     const inputs = [...document.querySelectorAll('#choice-inputs input[type=text]')];
@@ -139,30 +146,78 @@ async function addQuestion() {
     addChoiceField();
     addChoiceField();
     document.getElementById('q-correct-text').value = '';
+    document.getElementById('q-due-at').value = '';
+    document.getElementById('q-late-penalty').value = '0';
     showToast('問題を登録しました');
     loadQuestions();
   } catch (e) { showToast(e.message); }
 }
 
+async function addBulkQuestions() {
+  const rawText = document.getElementById('bulk-question-text').value;
+  const points = document.getElementById('bulk-points').value;
+  const dueAt = document.getElementById('bulk-due-at').value;
+  const latePenalty = document.getElementById('bulk-late-penalty').value;
+  const assignedChildId = document.getElementById('bulk-assigned-child').value;
+  if (!rawText.trim()) { showToast('テキストを入力してください'); return; }
+  try {
+    const created = await apiPost('/api/questions/bulk', {
+      rawText, points, dueAt: dueAt || null, latePenalty, assignedChildId: assignedChildId || null
+    });
+    document.getElementById('bulk-question-text').value = '';
+    document.getElementById('bulk-due-at').value = '';
+    document.getElementById('bulk-late-penalty').value = '0';
+    showToast(`${created.length}問を登録しました`);
+    loadQuestions();
+  } catch (e) { showToast(e.message); }
+}
+
+async function addBulkCsvQuestions() {
+  const csvText = document.getElementById('bulk-csv-text').value;
+  const points = document.getElementById('bulk-csv-points').value;
+  const dueAt = document.getElementById('bulk-csv-due-at').value;
+  const latePenalty = document.getElementById('bulk-csv-late-penalty').value;
+  const assignedChildId = document.getElementById('bulk-csv-assigned-child').value;
+  if (!csvText.trim()) { showToast('CSVを入力してください'); return; }
+  try {
+    const created = await apiPost('/api/questions/bulk-csv', {
+      csvText, points, dueAt: dueAt || null, latePenalty, assignedChildId: assignedChildId || null
+    });
+    document.getElementById('bulk-csv-text').value = '';
+    document.getElementById('bulk-csv-due-at').value = '';
+    document.getElementById('bulk-csv-late-penalty').value = '0';
+    showToast(`${created.length}問を登録しました`);
+    loadQuestions();
+  } catch (e) { showToast(e.message); }
+}
+
 async function loadQuestions() {
-  const questions = await apiGet('/api/questions');
+  const [questions, children] = await Promise.all([apiGet('/api/questions'), apiGet('/api/children')]);
   const el = document.getElementById('questions-list');
   if (questions.length === 0) {
     el.innerHTML = '<p class="muted">まだ問題がありません。</p>';
     return;
   }
-  el.innerHTML = questions.map((q) => `
+  el.innerHTML = questions.map((q) => {
+    const assignedChild = children.find((c) => c.id === q.assignedChildId);
+    const dueLabel = q.dueAt ? `期限: ${new Date(q.dueAt).toLocaleString('ja-JP')}${q.latePenalty > 0 ? ` (未回答-${q.latePenalty}P)` : ''}` : '';
+    const tags = [q.subject, q.unit, q.difficulty].filter((t) => t).map((t) => escapeHtml(t)).join(' / ');
+    return `
     <div class="list-item">
       <div class="row-between">
-        <span>${escapeHtml(q.question)} <span class="muted">(${q.type === 'choice' ? '選択式' : '記述式'} / ${q.points}P)</span></span>
+        <span>${escapeHtml(q.question)} <span class="muted">(${q.type === 'choice' ? '選択式' : '記述式'} / ${q.points}P${assignedChild ? ` / ${escapeHtml(assignedChild.name)}へ` : ''})</span></span>
         <span>
           <button class="btn small secondary" onclick="toggleQuestionActive(${q.id}, ${!q.active})">${q.active ? '非公開にする' : '公開する'}</button>
           <button class="btn small secondary" onclick="deleteQuestion(${q.id})">削除</button>
         </span>
       </div>
+      ${tags ? `<div class="muted">${tags}</div>` : ''}
       ${q.type === 'choice' ? `<div class="muted">選択肢: ${q.choices.map((c, i) => (i === q.correctIndex ? `✅${escapeHtml(c)}` : escapeHtml(c))).join(' / ')}</div>` : ''}
+      ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}</div>` : ''}
+      ${dueLabel ? `<div class="muted">${dueLabel}</div>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function toggleQuestionActive(id, active) {
@@ -192,12 +247,13 @@ async function loadGrading() {
   }
   el.innerHTML = pending.map((a) => {
     const child = children.find((c) => c.id === a.childId) || { name: '(不明)' };
-    const q = questions.find((x) => x.id === a.questionId) || { question: '(削除された問題)', correctAnswer: '' };
+    const q = questions.find((x) => x.id === a.questionId) || { question: '(削除された問題)', correctAnswer: '', explanation: '' };
     return `
       <div class="list-item">
         <div>${escapeHtml(child.name)} さんの回答</div>
         <div><strong>問題:</strong> ${escapeHtml(q.question)}</div>
         ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}</div>` : ''}
+        ${q.explanation ? `<div class="muted">解説: ${escapeHtml(q.explanation)}</div>` : ''}
         <div><strong>回答:</strong> ${escapeHtml(a.answerText)}</div>
         <div class="btn-row">
           <button class="btn green small" onclick="gradeAnswer(${a.id}, true)">正解</button>

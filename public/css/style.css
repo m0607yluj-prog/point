@@ -161,6 +161,7 @@ label { font-weight: bold; font-size: 0.9rem; display: block; margin-top: 8px; }
 .badge.pending { background: var(--orange); }
 .badge.correct { background: var(--green); }
 .badge.incorrect { background: var(--pink); }
+.badge.expired { background: var(--muted); }
 
 .reward-grid {
   display: grid;

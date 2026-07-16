@@ -18,6 +18,46 @@ function todayKey() {
   return now().slice(0, 10);
 }
 
+function normalizeDueAt(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// Strips leading numbering markers (①②…, "1.", "1)", "(1)", "1、" etc.) from
+// a pasted line so the numbering used for humans doesn't end up in the question text.
+function stripLeadingMarker(line) {
+  return line.replace(/^\s*(?:[①-⑳]|\(?\d+\)?[.)、．]?)\s*/, '').trim();
+}
+
+// Minimal RFC4180-ish CSV parser: handles quoted fields, escaped quotes ("")
+// commas/newlines inside quotes, and CRLF/LF line endings.
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (clean[i + 1] === '"') { field += '"'; i += 1; } else { inQuotes = false; }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+    if (ch === '"') { inQuotes = true; continue; }
+    if (ch === ',') { row.push(field); field = ''; continue; }
+    if (ch === '\r') continue;
+    if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
+    field += ch;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
 // Wraps an async route handler so thrown errors become a 500 JSON response
 // instead of an unhandled rejection.
 function ah(handler) {
@@ -116,7 +156,10 @@ app.get('/api/questions', ah(async (req, res) => {
 }));
 
 app.post('/api/questions', ah(async (req, res) => {
-  const { type, question, choices, correctIndex, correctAnswer, points } = req.body;
+  const {
+    type, question, choices, correctIndex, correctAnswer, points, dueAt, latePenalty, assignedChildId,
+    subject, unit, difficulty, explanation
+  } = req.body;
   if (!question || !question.trim()) return res.status(400).json({ error: '問題文を入力してください' });
   if (type !== 'choice' && type !== 'text') return res.status(400).json({ error: '出題形式が不正です' });
   if (type === 'choice') {
@@ -136,6 +179,13 @@ app.post('/api/questions', ah(async (req, res) => {
       correctIndex: type === 'choice' ? Number(correctIndex) : null,
       correctAnswer: type === 'text' ? (correctAnswer || '').trim() : '',
       points: Math.max(0, Number(points) || 0),
+      dueAt: normalizeDueAt(dueAt),
+      latePenalty: Math.max(0, Number(latePenalty) || 0),
+      assignedChildId: assignedChildId ? Number(assignedChildId) : null,
+      subject: (subject || '').trim(),
+      unit: (unit || '').trim(),
+      difficulty: (difficulty || '').trim(),
+      explanation: (explanation || '').trim(),
       active: true,
       createdAt: now()
     };
@@ -143,6 +193,100 @@ app.post('/api/questions', ah(async (req, res) => {
     return item;
   });
   res.json(q);
+}));
+
+// Bulk-create text-type questions from pasted multi-line text, one question
+// per non-empty line, sharing the same points/deadline/penalty settings.
+app.post('/api/questions/bulk', ah(async (req, res) => {
+  const { rawText, points, dueAt, latePenalty, assignedChildId } = req.body;
+  if (!rawText || !rawText.trim()) return res.status(400).json({ error: 'テキストを入力してください' });
+  const lines = rawText
+    .split('\n')
+    .map((line) => stripLeadingMarker(line))
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return res.status(400).json({ error: '問題文が見つかりませんでした' });
+
+  const created = await withDb((db) => {
+    const items = lines.map((line) => {
+      const item = {
+        id: nextId(db.questions),
+        type: 'text',
+        question: line,
+        choices: [],
+        correctIndex: null,
+        correctAnswer: '',
+        points: Math.max(0, Number(points) || 0),
+        dueAt: normalizeDueAt(dueAt),
+        latePenalty: Math.max(0, Number(latePenalty) || 0),
+        assignedChildId: assignedChildId ? Number(assignedChildId) : null,
+        active: true,
+        createdAt: now()
+      };
+      db.questions.push(item);
+      return item;
+    });
+    return items;
+  });
+  res.json(created);
+}));
+
+// Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説
+// (header row required; columns matched by name, so order/missing columns are tolerated).
+app.post('/api/questions/bulk-csv', ah(async (req, res) => {
+  const { csvText, points, dueAt, latePenalty, assignedChildId } = req.body;
+  if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
+
+  const rows = parseCsv(csvText).filter((row) => row.some((cell) => cell.trim().length > 0));
+  if (rows.length < 2) return res.status(400).json({ error: 'ヘッダー行とデータ行が必要です' });
+
+  const header = rows[0].map((h) => h.trim());
+  const colIndex = (name) => header.indexOf(name);
+  const qIdx = colIndex('問題');
+  if (qIdx === -1) return res.status(400).json({ error: 'ヘッダーに「問題」列が見つかりません' });
+  const subjectIdx = colIndex('教科');
+  const unitIdx = colIndex('単元');
+  const difficultyIdx = colIndex('難易度');
+  const answerIdx = colIndex('解答');
+  const explanationIdx = colIndex('解説');
+
+  const dataRows = rows.slice(1);
+  const parsedItems = dataRows
+    .map((row) => ({
+      question: (row[qIdx] || '').trim(),
+      subject: subjectIdx === -1 ? '' : (row[subjectIdx] || '').trim(),
+      unit: unitIdx === -1 ? '' : (row[unitIdx] || '').trim(),
+      difficulty: difficultyIdx === -1 ? '' : (row[difficultyIdx] || '').trim(),
+      correctAnswer: answerIdx === -1 ? '' : (row[answerIdx] || '').trim(),
+      explanation: explanationIdx === -1 ? '' : (row[explanationIdx] || '').trim()
+    }))
+    .filter((item) => item.question.length > 0);
+  if (parsedItems.length === 0) return res.status(400).json({ error: '問題文が見つかりませんでした' });
+
+  const created = await withDb((db) => {
+    return parsedItems.map((parsed) => {
+      const item = {
+        id: nextId(db.questions),
+        type: 'text',
+        question: parsed.question,
+        choices: [],
+        correctIndex: null,
+        correctAnswer: parsed.correctAnswer,
+        points: Math.max(0, Number(points) || 0),
+        dueAt: normalizeDueAt(dueAt),
+        latePenalty: Math.max(0, Number(latePenalty) || 0),
+        assignedChildId: assignedChildId ? Number(assignedChildId) : null,
+        subject: parsed.subject,
+        unit: parsed.unit,
+        difficulty: parsed.difficulty,
+        explanation: parsed.explanation,
+        active: true,
+        createdAt: now()
+      };
+      db.questions.push(item);
+      return item;
+    });
+  });
+  res.json(created);
 }));
 
 app.patch('/api/questions/:id', ah(async (req, res) => {
@@ -156,6 +300,15 @@ app.patch('/api/questions/:id', ah(async (req, res) => {
     if (updates.correctIndex !== undefined) item.correctIndex = Number(updates.correctIndex);
     if (updates.correctAnswer !== undefined) item.correctAnswer = String(updates.correctAnswer).trim();
     if (updates.points !== undefined) item.points = Math.max(0, Number(updates.points) || 0);
+    if (updates.dueAt !== undefined) item.dueAt = normalizeDueAt(updates.dueAt);
+    if (updates.latePenalty !== undefined) item.latePenalty = Math.max(0, Number(updates.latePenalty) || 0);
+    if (updates.assignedChildId !== undefined) {
+      item.assignedChildId = updates.assignedChildId ? Number(updates.assignedChildId) : null;
+    }
+    if (updates.subject !== undefined) item.subject = String(updates.subject).trim();
+    if (updates.unit !== undefined) item.unit = String(updates.unit).trim();
+    if (updates.difficulty !== undefined) item.difficulty = String(updates.difficulty).trim();
+    if (updates.explanation !== undefined) item.explanation = String(updates.explanation).trim();
     if (updates.active !== undefined) item.active = Boolean(updates.active);
     return item;
   });

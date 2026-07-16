@@ -82,7 +82,9 @@ function showTab(tab) {
 
 function renderQuiz() {
   const answeredIds = new Set(allAnswers.map((a) => a.questionId));
-  const unanswered = allQuestions.filter((q) => !answeredIds.has(q.id));
+  const unanswered = allQuestions.filter((q) =>
+    !answeredIds.has(q.id) && (!q.assignedChildId || q.assignedChildId === currentChild.id)
+  );
   const container = document.getElementById('quiz-list');
 
   if (unanswered.length === 0) {
@@ -91,6 +93,9 @@ function renderQuiz() {
   }
 
   container.innerHTML = unanswered.map((q) => {
+    const dueLabel = q.dueAt
+      ? `<div class="muted">期限: ${new Date(q.dueAt).toLocaleString('ja-JP')}${q.latePenalty > 0 ? ` (すぎると-${q.latePenalty}P)` : ''}</div>`
+      : '';
     if (q.type === 'choice') {
       const options = q.choices.map((c, i) => `
         <label class="choice-option">
@@ -101,6 +106,7 @@ function renderQuiz() {
       return `
         <div class="card" id="qcard-${q.id}">
           <div class="row-between"><h3>${escapeHtml(q.question)}</h3><span class="muted">${q.points}P</span></div>
+          ${dueLabel}
           ${options}
           <button class="btn green" onclick="submitChoice(${q.id})">こたえる</button>
         </div>
@@ -109,6 +115,7 @@ function renderQuiz() {
       return `
         <div class="card" id="qcard-${q.id}">
           <div class="row-between"><h3>${escapeHtml(q.question)}</h3><span class="muted">${q.points}P</span></div>
+          ${dueLabel}
           <textarea rows="3" id="text-${q.id}" placeholder="こたえを かいてね"></textarea>
           <button class="btn green" onclick="submitText(${q.id})">こたえる</button>
         </div>
@@ -231,14 +238,19 @@ function renderResults() {
   const sorted = [...allAnswers].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
   container.innerHTML = sorted.map((a) => {
     const q = allQuestions.find((x) => x.id === a.questionId) || { question: '(削除された問題)' };
-    const statusLabel = a.status === 'pending' ? '採点中' : a.status === 'correct' ? 'せいかい' : 'まちがい';
+    const statusLabel = a.status === 'pending' ? '採点中'
+      : a.status === 'correct' ? 'せいかい'
+      : a.status === 'expired' ? '期限切れ'
+      : 'まちがい';
+    const showExplanation = a.status !== 'pending' && q.explanation;
     return `
       <div class="list-item">
         <div class="row-between">
           <span>${escapeHtml(q.question)}</span>
           <span class="badge ${a.status}">${statusLabel}</span>
         </div>
-        <div class="muted">${a.pointsAwarded > 0 ? `+${a.pointsAwarded}P` : ''}</div>
+        <div class="muted">${a.pointsAwarded !== 0 ? `${a.pointsAwarded > 0 ? '+' : ''}${a.pointsAwarded}P` : ''}</div>
+        ${showExplanation ? `<div class="muted">解説: ${escapeHtml(q.explanation)}</div>` : ''}
       </div>
     `;
   }).join('');
