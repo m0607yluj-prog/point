@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>きっずポイント（こども）</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="profile-screen" class="wrap">
+  <h1 style="text-align:center;">🧒 だれかな？</h1>
+  <p class="muted" style="text-align:center;">じぶんの名前をタップしてね</p>
+  <div id="child-picker" class="child-picker"></div>
+  <p style="text-align:center; margin-top:24px;"><a href="index.html">← トップにもどる</a></p>
+</div>
+
+<div id="main-screen" class="hidden">
+  <div class="title-bar">
+    <h1><span id="my-avatar"></span> <span id="my-name"></span></h1>
+    <div>
+      <span class="points-display" id="my-points" style="color:white;">0 P</span>
+      <button class="btn small secondary" onclick="switchProfile()">きりかえ</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 もんだい</button>
+    <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 おてつだい</button>
+    <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 けっか</button>
+    <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ごほうび</button>
+  </div>
+
+  <div class="wrap">
+    <div id="tab-quiz" class="tab-content">
+      <div id="quiz-list"></div>
+    </div>
+    <div id="tab-chores" class="tab-content hidden">
+      <div class="card">
+        <h3>いつでもできる おてつだい</h3>
+        <div id="routine-chore-list"></div>
+      </div>
+      <div class="card">
+        <h3>おねがいされた おてつだい</h3>
+        <div id="adhoc-chore-list"></div>
+      </div>
+      <div class="card">
+        <h3>さいきんの おてつだい</h3>
+        <div id="chore-history"></div>
+      </div>
+    </div>
+    <div id="tab-results" class="tab-content hidden">
+      <div id="results-list" class="card"></div>
+    </div>
+    <div id="tab-rewards" class="tab-content hidden">
+      <div class="card">
+        <h3>ポイントで こうかんしよう</h3>
+        <div id="reward-list" class="reward-grid"></div>
+      </div>
+      <div class="card">
+        <h3>こうかんした きろく</h3>
+        <div id="redemption-history"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/child.js"></script>
+</body>
+</html>
