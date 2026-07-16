@@ -24,6 +24,36 @@ function normalizeDueAt(value) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+const RETRY_DELAY_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+// When a child answers a question incorrectly, re-issue the same question to
+// them personally with a fresh 2-day deadline (same points/penalty/explanation)
+// so they get another chance. Grading that copy wrong again schedules yet
+// another retry, so this repeats until they get it right.
+function scheduleRetry(db, question, childId) {
+  const retry = {
+    id: nextId(db.questions),
+    type: question.type,
+    question: question.question,
+    choices: question.choices || [],
+    correctIndex: question.correctIndex !== undefined ? question.correctIndex : null,
+    correctAnswer: question.correctAnswer || '',
+    points: question.points,
+    dueAt: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
+    latePenalty: question.latePenalty || 0,
+    assignedChildId: childId,
+    subject: question.subject || '',
+    unit: question.unit || '',
+    difficulty: question.difficulty || '',
+    explanation: question.explanation || '',
+    retryOf: question.id,
+    active: true,
+    createdAt: now()
+  };
+  db.questions.push(retry);
+  return retry;
+}
+
 // Strips leading numbering markers (①②…, "1.", "1)", "(1)", "1、" etc.) from
 // a pasted line so the numbering used for humans doesn't end up in the question text.
 function stripLeadingMarker(line) {
@@ -366,6 +396,8 @@ app.post('/api/answers', ah(async (req, res) => {
       if (isCorrect) {
         answer.pointsAwarded = question.points;
         child.points += question.points;
+      } else {
+        scheduleRetry(db, question, child.id);
       }
     }
     // text type stays 'pending' until parent grades it
@@ -389,9 +421,13 @@ app.patch('/api/answers/:id/grade', ah(async (req, res) => {
     const child = db.children.find((c) => c.id === answer.childId);
     answer.status = correct ? 'correct' : 'incorrect';
     answer.gradedAt = now();
-    if (correct && question && child) {
-      answer.pointsAwarded = question.points;
-      child.points += question.points;
+    if (question && child) {
+      if (correct) {
+        answer.pointsAwarded = question.points;
+        child.points += question.points;
+      } else {
+        scheduleRetry(db, question, child.id);
+      }
     }
     return { answer, child };
   });

@@ -80,11 +80,40 @@ function showTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 }
 
+function populateFilterSelect(id, values, allLabel) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const current = select.value;
+  const distinct = [...new Set(values.filter((v) => v))].sort();
+  select.innerHTML = `<option value="">${allLabel}</option>` +
+    distinct.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  select.value = distinct.includes(current) ? current : '';
+}
+
 function renderQuiz() {
   const answeredIds = new Set(allAnswers.map((a) => a.questionId));
-  const unanswered = allQuestions.filter((q) =>
+  const eligible = allQuestions.filter((q) =>
     !answeredIds.has(q.id) && (!q.assignedChildId || q.assignedChildId === currentChild.id)
   );
+
+  populateFilterSelect('quiz-filter-subject', eligible.map((q) => q.subject), '教科: すべて');
+  populateFilterSelect('quiz-filter-unit', eligible.map((q) => q.unit), '単元: すべて');
+  populateFilterSelect('quiz-filter-difficulty', eligible.map((q) => q.difficulty), '難易度: すべて');
+
+  const subjectFilter = document.getElementById('quiz-filter-subject').value;
+  const unitFilter = document.getElementById('quiz-filter-unit').value;
+  const difficultyFilter = document.getElementById('quiz-filter-difficulty').value;
+  const dueFilter = document.getElementById('quiz-filter-due').value;
+
+  const unanswered = eligible.filter((q) => {
+    if (subjectFilter && q.subject !== subjectFilter) return false;
+    if (unitFilter && q.unit !== unitFilter) return false;
+    if (difficultyFilter && q.difficulty !== difficultyFilter) return false;
+    if (dueFilter === 'has' && !q.dueAt) return false;
+    if (dueFilter === 'none' && q.dueAt) return false;
+    return true;
+  });
+
   const container = document.getElementById('quiz-list');
 
   if (unanswered.length === 0) {

@@ -32,6 +32,18 @@
 
   <div class="wrap">
     <div id="tab-quiz" class="tab-content">
+      <div class="card">
+        <div class="btn-row">
+          <select id="quiz-filter-subject" onchange="renderQuiz()"><option value="">教科: すべて</option></select>
+          <select id="quiz-filter-unit" onchange="renderQuiz()"><option value="">単元: すべて</option></select>
+          <select id="quiz-filter-difficulty" onchange="renderQuiz()"><option value="">難易度: すべて</option></select>
+          <select id="quiz-filter-due" onchange="renderQuiz()">
+            <option value="">期限: すべて</option>
+            <option value="has">期限あり</option>
+            <option value="none">期限なし</option>
+          </select>
+        </div>
+      </div>
       <div id="quiz-list"></div>
     </div>
     <div id="tab-chores" class="tab-content hidden">

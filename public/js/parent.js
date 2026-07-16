@@ -1,4 +1,6 @@
 let choiceFieldCount = 0;
+let cachedQuestions = [];
+let cachedChildrenForQuestions = [];
 
 function checkPin() {
   const pin = document.getElementById('pin-input').value;
@@ -193,13 +195,48 @@ async function addBulkCsvQuestions() {
 
 async function loadQuestions() {
   const [questions, children] = await Promise.all([apiGet('/api/questions'), apiGet('/api/children')]);
+  cachedQuestions = questions;
+  cachedChildrenForQuestions = children;
+  populateFilterSelect('filter-subject', questions.map((q) => q.subject), '教科: すべて');
+  populateFilterSelect('filter-unit', questions.map((q) => q.unit), '単元: すべて');
+  populateFilterSelect('filter-difficulty', questions.map((q) => q.difficulty), '難易度: すべて');
+  renderQuestionsList();
+}
+
+function populateFilterSelect(id, values, allLabel) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const current = select.value;
+  const distinct = [...new Set(values.filter((v) => v))].sort();
+  select.innerHTML = `<option value="">${allLabel}</option>` +
+    distinct.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  select.value = distinct.includes(current) ? current : '';
+}
+
+function renderQuestionsList() {
   const el = document.getElementById('questions-list');
+  const subjectFilter = document.getElementById('filter-subject').value;
+  const unitFilter = document.getElementById('filter-unit').value;
+  const difficultyFilter = document.getElementById('filter-difficulty').value;
+  const dueFilter = document.getElementById('filter-due').value;
+  const nowIso = new Date().toISOString();
+
+  const questions = cachedQuestions.filter((q) => {
+    if (subjectFilter && q.subject !== subjectFilter) return false;
+    if (unitFilter && q.unit !== unitFilter) return false;
+    if (difficultyFilter && q.difficulty !== difficultyFilter) return false;
+    if (dueFilter === 'has' && !q.dueAt) return false;
+    if (dueFilter === 'none' && q.dueAt) return false;
+    if (dueFilter === 'expired' && !(q.dueAt && q.dueAt < nowIso)) return false;
+    return true;
+  });
+
   if (questions.length === 0) {
-    el.innerHTML = '<p class="muted">まだ問題がありません。</p>';
+    el.innerHTML = '<p class="muted">条件に一致する問題がありません。</p>';
     return;
   }
   el.innerHTML = questions.map((q) => {
-    const assignedChild = children.find((c) => c.id === q.assignedChildId);
+    const assignedChild = cachedChildrenForQuestions.find((c) => c.id === q.assignedChildId);
     const dueLabel = q.dueAt ? `期限: ${new Date(q.dueAt).toLocaleString('ja-JP')}${q.latePenalty > 0 ? ` (未回答-${q.latePenalty}P)` : ''}` : '';
     const tags = [q.subject, q.unit, q.difficulty].filter((t) => t).map((t) => escapeHtml(t)).join(' / ');
     return `

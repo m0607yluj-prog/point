@@ -124,6 +124,17 @@
 
       <div class="card">
         <h3>登録済みの問題</h3>
+        <div class="btn-row">
+          <select id="filter-subject" onchange="renderQuestionsList()"><option value="">教科: すべて</option></select>
+          <select id="filter-unit" onchange="renderQuestionsList()"><option value="">単元: すべて</option></select>
+          <select id="filter-difficulty" onchange="renderQuestionsList()"><option value="">難易度: すべて</option></select>
+          <select id="filter-due" onchange="renderQuestionsList()">
+            <option value="">期限: すべて</option>
+            <option value="has">期限あり</option>
+            <option value="none">期限なし</option>
+            <option value="expired">期限切れ</option>
+          </select>
+        </div>
         <div id="questions-list"></div>
       </div>
     </div>
