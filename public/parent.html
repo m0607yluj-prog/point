@@ -110,10 +110,10 @@
 
       <div class="card">
         <h3>CSVで一括登録</h3>
-        <p class="muted">1行目は見出し（教科,単元,難易度,問題,解答,解説）にしてください。「問題」列以外は空欄でも構いません。Excel等の表からコピー＆ペーストできます。</p>
-        <textarea id="bulk-csv-text" rows="8" placeholder="教科,単元,難易度,問題,解答,解説&#10;算数,方程式,かんたん,x＋9＝18,9,両辺から9をひく"></textarea>
+        <p class="muted">1行目は見出し（教科,単元,難易度,問題,解答,解説,ポイント）にしてください。「問題」列以外は空欄でも構いません。「ポイント」列を入れると問題ごとに点数を変えられます（列がない・空欄の行は下の共通ポイントを使います）。Excel等の表からコピー＆ペーストできます。</p>
+        <textarea id="bulk-csv-text" rows="8" placeholder="教科,単元,難易度,問題,解答,解説,ポイント&#10;算数,方程式,かんたん,x＋9＝18,9,両辺から9をひく,5&#10;算数,方程式,ふつう,3x＋2y＝12でx=2のときのyは？,3,,10"></textarea>
         <label><input type="checkbox" id="bulk-csv-auto-grade-exact" style="width:auto;" /> 解答が「解答」列と完全一致したら自動で正解にする</label>
-        <label>正解ポイント（共通）</label>
+        <label>正解ポイント（共通・「ポイント」列が空欄の行に使われます）</label>
         <input type="number" id="bulk-csv-points" value="10" min="0" />
         <label>期限（任意・共通）</label>
         <input type="datetime-local" id="bulk-csv-due-at" />

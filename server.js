@@ -296,8 +296,10 @@ app.post('/api/questions/bulk', ah(async (req, res) => {
   res.json(created);
 }));
 
-// Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説
+// Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説,ポイント
 // (header row required; columns matched by name, so order/missing columns are tolerated).
+// A row's own ポイント value wins; if blank or the column is absent, the shared
+// `points` field from the request body is used instead.
 app.post('/api/questions/bulk-csv', ah(async (req, res) => {
   const { csvText, points, dueAt, latePenalty, assignedChildId, autoGradeExact } = req.body;
   if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
@@ -314,6 +316,7 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
   const difficultyIdx = colIndex('難易度');
   const answerIdx = colIndex('解答');
   const explanationIdx = colIndex('解説');
+  const pointsIdx = colIndex('ポイント');
 
   const dataRows = rows.slice(1);
   const parsedItems = dataRows
@@ -323,7 +326,12 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
       unit: unitIdx === -1 ? '' : (row[unitIdx] || '').trim(),
       difficulty: difficultyIdx === -1 ? '' : (row[difficultyIdx] || '').trim(),
       correctAnswer: answerIdx === -1 ? '' : (row[answerIdx] || '').trim(),
-      explanation: explanationIdx === -1 ? '' : (row[explanationIdx] || '').trim()
+      explanation: explanationIdx === -1 ? '' : (row[explanationIdx] || '').trim(),
+      // Falls back to the shared "points" field when the row has no value of
+      // its own, so CSVs without a ポイント column keep working as before.
+      points: pointsIdx !== -1 && (row[pointsIdx] || '').trim() !== ''
+        ? Math.max(0, Number((row[pointsIdx] || '').trim()) || 0)
+        : Math.max(0, Number(points) || 0)
     }))
     .filter((item) => item.question.length > 0);
   if (parsedItems.length === 0) return res.status(400).json({ error: '問題文が見つかりませんでした' });
@@ -337,7 +345,7 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
         choices: [],
         correctIndex: null,
         correctAnswer: parsed.correctAnswer,
-        points: Math.max(0, Number(points) || 0),
+        points: parsed.points,
         dueAt: normalizeDueAt(dueAt),
         latePenalty: Math.max(0, Number(latePenalty) || 0),
         assignedChildId: assignedChildId ? Number(assignedChildId) : null,
