@@ -193,6 +193,8 @@ function renderChores() {
     'いつでもできるお手伝いはまだないよ。', '今は依頼されたお手伝いはないよ。', 'まだお手伝いをしていないよ。');
   renderChoreCategory('study', 'study-routine-list', 'study-adhoc-list', 'study-history',
     'いつでもできる勉強タスクはまだないよ。', '今は勉強タスクはないよ。', 'まだ勉強をしていないよ。');
+  renderChoreCategory('bonus', 'bonus-routine-list', 'bonus-adhoc-list', 'bonus-history',
+    'いつでもできるボーナスはまだないよ。', '今はボーナスタスクはないよ。', 'まだボーナスはないよ。');
 }
 
 function renderChoreCategory(category, routineElId, adhocElId, historyElId, routineEmptyMsg, adhocEmptyMsg, historyEmptyMsg) {

@@ -39,6 +39,7 @@ function showTab(tab) {
   if (tab === 'grading') loadGrading();
   if (tab === 'chores') loadChores();
   if (tab === 'study') loadStudyTasks();
+  if (tab === 'bonus') loadBonusTasks();
   if (tab === 'points') loadPoints();
   if (tab === 'rewards') loadRewards();
 }
@@ -83,7 +84,8 @@ async function copyChildUrl(id, name) {
 
 const CHILD_TARGET_SELECT_IDS = [
   'new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child',
-  'new-study-task-child', 'bulk-study-csv-assigned-child', 'new-recurring-task-child'
+  'new-study-task-child', 'bulk-study-csv-assigned-child', 'new-recurring-task-child',
+  'new-bonus-task-child', 'bulk-bonus-csv-assigned-child'
 ];
 
 function populateAdhocChildSelect(children) {
@@ -556,12 +558,45 @@ async function addBulkCsvStudyTasks() {
   } catch (e) { showToast(e.message); }
 }
 
+async function addBonusTask() {
+  const name = document.getElementById('new-bonus-task-name').value;
+  const points = document.getElementById('new-bonus-task-points').value;
+  const assignedChildId = document.getElementById('new-bonus-task-child').value;
+  const levels = collectLevels('bonus-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', {
+      name, type: 'adhoc', points, levels, assignedChildId: assignedChildId || null, category: 'bonus'
+    });
+    document.getElementById('new-bonus-task-name').value = '';
+    clearLevelRows('bonus-levels');
+    showToast('追加しました');
+    loadBonusTasks();
+  } catch (e) { showToast(e.message); }
+}
+
+async function addBulkCsvBonusTasks() {
+  const csvText = document.getElementById('bulk-bonus-csv-text').value;
+  const assignedChildId = document.getElementById('bulk-bonus-csv-assigned-child').value;
+  if (!csvText.trim()) { showToast('CSVを入力してください'); return; }
+  try {
+    const created = await apiPost('/api/chores/bulk-csv', { csvText, assignedChildId: assignedChildId || null, category: 'bonus' });
+    document.getElementById('bulk-bonus-csv-text').value = '';
+    showToast(`${created.length}件を登録しました`);
+    loadBonusTasks();
+  } catch (e) { showToast(e.message); }
+}
+
 async function loadChores() {
   await renderChoreCategory('household', 'chores-list', 'chore-approval-list', 'まだお手伝いが登録されていません。');
 }
 
 async function loadStudyTasks() {
   await renderChoreCategory('study', 'study-tasks-list', 'study-approval-list', 'まだ勉強タスクが登録されていません。');
+}
+
+async function loadBonusTasks() {
+  await renderChoreCategory('bonus', 'bonus-tasks-list', 'bonus-approval-list', 'まだボーナスタスクが登録されていません。');
 }
 
 async function renderChoreCategory(category, listElId, approvalElId, emptyMessage) {
@@ -639,6 +674,7 @@ async function toggleChoreActive(id, active) {
   await apiPatch(`/api/chores/${id}`, { active });
   loadChores();
   loadStudyTasks();
+  loadBonusTasks();
 }
 
 async function deleteChore(id) {
@@ -647,22 +683,24 @@ async function deleteChore(id) {
   await apiDelete(`/api/chores/${id}`);
   loadChores();
   loadStudyTasks();
+  loadBonusTasks();
 }
 
 async function editChore(id) {
   const chore = cachedChores.find((c) => c.id === id);
   if (!chore) return;
-  const isStudy = chore.category === 'study';
+  const categoryLabel = chore.category === 'study' ? '勉強タスク' : chore.category === 'bonus' ? 'ボーナスタスク' : 'お手伝い';
+  const hasSubjectUnit = chore.category === 'study' || chore.category === 'bonus';
   const isRoutine = chore.type === 'routine';
   const levelsId = `edit-chore-levels-${id}`;
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   overlay.innerHTML = `
     <div class="card" style="max-width:480px; max-height:90vh; overflow-y:auto;">
-      <h3>${isStudy ? '勉強タスク' : 'お手伝い'}を編集</h3>
+      <h3>${categoryLabel}を編集</h3>
       <label>内容</label>
       <input type="text" id="edit-chore-name-${id}" value="${escapeHtml(chore.name)}" />
-      ${isStudy ? `
+      ${hasSubjectUnit ? `
         <label>教科（任意）</label>
         <input type="text" id="edit-chore-subject-${id}" value="${escapeHtml(chore.subject || '')}" />
         <label>単元・教材（任意）</label>
@@ -715,7 +753,7 @@ async function saveChoreEdit(id, btn) {
     levels: collectLevels(`edit-chore-levels-${id}`),
     assignedChildId: assignedChildId || null
   };
-  if (chore.category === 'study') {
+  if (chore.category === 'study' || chore.category === 'bonus') {
     payload.subject = overlay.querySelector(`#edit-chore-subject-${id}`).value;
     payload.unit = overlay.querySelector(`#edit-chore-unit-${id}`).value;
   }
@@ -730,6 +768,7 @@ async function saveChoreEdit(id, btn) {
     showToast('更新しました');
     loadChores();
     loadStudyTasks();
+    loadBonusTasks();
   } catch (e) { showToast(e.message); }
 }
 
@@ -741,6 +780,7 @@ async function gradeChore(id, approved, levelIndex) {
     showToast(approved ? 'ポイントを付与しました' : 'やり直しにしました');
     loadChores();
     loadStudyTasks();
+    loadBonusTasks();
   } catch (e) { showToast(e.message); }
 }
 

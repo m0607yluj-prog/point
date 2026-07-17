@@ -36,6 +36,7 @@
     <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 問題</button>
     <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
     <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強</button>
+    <button class="tab-btn" data-tab="bonus" onclick="showTab('bonus')">🏆 ボーナス</button>
     <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 結果</button>
     <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ご褒美</button>
   </div>
@@ -82,6 +83,20 @@
       <div class="card">
         <h3>最近の勉強</h3>
         <div id="study-history"></div>
+      </div>
+    </div>
+    <div id="tab-bonus" class="tab-content hidden">
+      <div class="card">
+        <h3>いつでもできるボーナス</h3>
+        <div id="bonus-routine-list"></div>
+      </div>
+      <div class="card">
+        <h3>出されているボーナスタスク</h3>
+        <div id="bonus-adhoc-list"></div>
+      </div>
+      <div class="card">
+        <h3>最近のボーナス</h3>
+        <div id="bonus-history"></div>
       </div>
     </div>
     <div id="tab-results" class="tab-content hidden">

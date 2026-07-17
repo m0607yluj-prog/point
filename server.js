@@ -559,7 +559,12 @@ app.post('/api/redemptions', ah(async (req, res) => {
   res.json(result);
 }));
 
-// ---------- Chores (お手伝い・勉強タスク) ----------
+// ---------- Chores (お手伝い・勉強タスク・ボーナスタスク) ----------
+
+const CHORE_CATEGORIES = ['household', 'study', 'bonus'];
+function normalizeCategory(value) {
+  return CHORE_CATEGORIES.includes(value) ? value : 'household';
+}
 
 // Achievement levels let a chore be graded at multiple tiers (e.g. かんぺき/
 // まあまあ/もうすこし) each worth different points, instead of a single
@@ -593,7 +598,7 @@ app.post('/api/chores', ah(async (req, res) => {
       type,
       points: Math.max(0, Number(points) || 0),
       assignedChildId: assignedChildId ? Number(assignedChildId) : null,
-      category: category === 'study' ? 'study' : 'household',
+      category: normalizeCategory(category),
       subject: (subject || '').trim(),
       unit: (unit || '').trim(),
       levels: normalizeLevels(levels),
@@ -620,7 +625,7 @@ app.patch('/api/chores/:id', ah(async (req, res) => {
     if (updates.assignedChildId !== undefined) {
       item.assignedChildId = updates.assignedChildId ? Number(updates.assignedChildId) : null;
     }
-    if (updates.category !== undefined) item.category = updates.category === 'study' ? 'study' : 'household';
+    if (updates.category !== undefined) item.category = normalizeCategory(updates.category);
     if (updates.subject !== undefined) item.subject = String(updates.subject).trim();
     if (updates.unit !== undefined) item.unit = String(updates.unit).trim();
     if (updates.levels !== undefined) item.levels = normalizeLevels(updates.levels);
@@ -645,7 +650,7 @@ app.delete('/api/chores/:id', ah(async (req, res) => {
 // Bulk-create study-task chores from a pasted CSV: 教科,単元,内容,ポイント
 // (header row required; columns matched by name).
 app.post('/api/chores/bulk-csv', ah(async (req, res) => {
-  const { csvText, assignedChildId } = req.body;
+  const { csvText, assignedChildId, category } = req.body;
   if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
 
   const rows = parseCsv(csvText).filter((row) => row.some((cell) => cell.trim().length > 0));
@@ -678,7 +683,7 @@ app.post('/api/chores/bulk-csv', ah(async (req, res) => {
         type: 'adhoc',
         points: parsed.points,
         assignedChildId: assignedChildId ? Number(assignedChildId) : null,
-        category: 'study',
+        category: category ? normalizeCategory(category) : 'study',
         subject: parsed.subject,
         unit: parsed.unit,
         levels: [],
