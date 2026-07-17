@@ -3,16 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>きっずポイント（こども）</title>
+<title>ポイント管理（こども）</title>
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<div id="profile-screen" class="wrap">
-  <h1 style="text-align:center;">🧒 だれかな？</h1>
-  <p class="muted" style="text-align:center;">じぶんの名前をタップしてね</p>
-  <div id="child-picker" class="child-picker"></div>
+<div id="blocked-screen" class="wrap">
+  <h1 style="text-align:center;">🔒 このページは開けません</h1>
+  <p class="muted" style="text-align:center;">保護者からもらった専用のリンクからアクセスしてね。</p>
   <p style="text-align:center; margin-top:24px;"><a href="index.html">← トップにもどる</a></p>
+</div>
+
+<div id="locked-out-screen" class="hidden wrap" style="text-align:center; padding-top:60px;">
+  <h1 style="font-size:3rem;">📵</h1>
+  <h1>スマホ・タブレット禁止</h1>
+  <p>ポイントがマイナスになっています。</p>
+  <p class="points-display" id="locked-points" style="font-size:2rem;">0 P</p>
+  <p class="muted">お手伝いや問題を頑張って、ポイントを0以上に戻そう。</p>
+  <p class="muted">詳しくは保護者に相談してね。</p>
+  <div style="margin-top:24px;"><a href="index.html">← トップにもどる</a></div>
 </div>
 
 <div id="main-screen" class="hidden">
@@ -20,15 +29,15 @@
     <h1><span id="my-avatar"></span> <span id="my-name"></span></h1>
     <div>
       <span class="points-display" id="my-points" style="color:white;">0 P</span>
-      <button class="btn small secondary" onclick="switchProfile()">きりかえ</button>
+      <a class="btn small secondary" href="index.html">終了</a>
     </div>
   </div>
   <div class="tabs">
-    <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 もんだい</button>
-    <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 おてつだい</button>
-    <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 べんきょう</button>
-    <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 けっか</button>
-    <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ごほうび</button>
+    <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 問題</button>
+    <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
+    <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強</button>
+    <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 結果</button>
+    <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ご褒美</button>
   </div>
 
   <div class="wrap">
@@ -49,29 +58,29 @@
     </div>
     <div id="tab-chores" class="tab-content hidden">
       <div class="card">
-        <h3>いつでもできる おてつだい</h3>
+        <h3>いつでもできるお手伝い</h3>
         <div id="routine-chore-list"></div>
       </div>
       <div class="card">
-        <h3>おねがいされた おてつだい</h3>
+        <h3>依頼されたお手伝い</h3>
         <div id="adhoc-chore-list"></div>
       </div>
       <div class="card">
-        <h3>さいきんの おてつだい</h3>
+        <h3>最近のお手伝い</h3>
         <div id="chore-history"></div>
       </div>
     </div>
     <div id="tab-study" class="tab-content hidden">
       <div class="card">
-        <h3>いつでもできる べんきょう</h3>
+        <h3>いつでもできる勉強</h3>
         <div id="study-routine-list"></div>
       </div>
       <div class="card">
-        <h3>だされている べんきょうタスク</h3>
+        <h3>出されている勉強タスク</h3>
         <div id="study-adhoc-list"></div>
       </div>
       <div class="card">
-        <h3>さいきんの べんきょう</h3>
+        <h3>最近の勉強</h3>
         <div id="study-history"></div>
       </div>
     </div>
@@ -80,11 +89,11 @@
     </div>
     <div id="tab-rewards" class="tab-content hidden">
       <div class="card">
-        <h3>ポイントで こうかんしよう</h3>
+        <h3>ポイントで交換しよう</h3>
         <div id="reward-list" class="reward-grid"></div>
       </div>
       <div class="card">
-        <h3>こうかんした きろく</h3>
+        <h3>交換した記録</h3>
         <div id="redemption-history"></div>
       </div>
     </div>

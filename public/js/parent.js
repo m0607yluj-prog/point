@@ -1,6 +1,8 @@
 let choiceFieldCount = 0;
 let cachedQuestions = [];
 let cachedChildrenForQuestions = [];
+let cachedChores = [];
+let cachedChildrenForChores = [];
 
 function checkPin() {
   const pin = document.getElementById('pin-input').value;
@@ -58,11 +60,25 @@ async function loadChildren() {
     el.innerHTML = children.map((c) => `
       <div class="list-item row-between">
         <span>${escapeHtml(c.avatar)} ${escapeHtml(c.name)} <span class="muted">(${c.points}P)</span></span>
-        <button class="btn small secondary" onclick="deleteChild(${c.id}, '${escapeHtml(c.name)}')">削除</button>
+        <span>
+          <button class="btn small secondary" onclick="copyChildUrl(${c.id}, '${escapeHtml(c.name)}')">専用URLをコピー</button>
+          <button class="btn small secondary" onclick="deleteChild(${c.id}, '${escapeHtml(c.name)}')">削除</button>
+        </span>
       </div>
     `).join('');
   }
   populateAdhocChildSelect(children);
+}
+
+async function copyChildUrl(id, name) {
+  try {
+    const { token } = await apiGet(`/api/children/${id}/token`);
+    const url = `${location.origin}/child.html?token=${token}`;
+    await navigator.clipboard.writeText(url);
+    showToast(`${name}さん専用のURLをコピーしました`);
+  } catch (e) {
+    showToast('コピーに失敗しました。手動でご確認ください: ' + e.message);
+  }
 }
 
 const CHILD_TARGET_SELECT_IDS = [
@@ -249,6 +265,7 @@ function renderQuestionsList() {
       <div class="row-between">
         <span>${escapeHtml(q.question)} <span class="muted">(${q.type === 'choice' ? '選択式' : '記述式'} / ${q.points}P${assignedChild ? ` / ${escapeHtml(assignedChild.name)}へ` : ''})</span></span>
         <span>
+          <button class="btn small secondary" onclick="editQuestion(${q.id})">編集</button>
           <button class="btn small secondary" onclick="toggleQuestionActive(${q.id}, ${!q.active})">${q.active ? '非公開にする' : '公開する'}</button>
           <button class="btn small secondary" onclick="deleteQuestion(${q.id})">削除</button>
         </span>
@@ -272,6 +289,117 @@ async function deleteQuestion(id) {
   if (!ok) return;
   await apiDelete(`/api/questions/${id}`);
   loadQuestions();
+}
+
+function toLocalDateTimeValue(iso) {
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function addEditChoiceField(containerId, radioName, value, checked) {
+  const wrap = document.getElementById(containerId);
+  const idx = wrap.children.length;
+  const row = document.createElement('div');
+  row.className = 'row-between';
+  row.style.marginBottom = '6px';
+  row.innerHTML = `
+    <input type="radio" name="${radioName}" value="${idx}" ${checked ? 'checked' : ''} style="width:auto;" />
+    <input type="text" class="edit-choice-text" value="${escapeHtml(value || '')}" placeholder="選択肢${idx + 1}" style="flex:1; margin:0 0 0 8px;" />
+  `;
+  wrap.appendChild(row);
+}
+
+// Every field/id below is suffixed with the question id so multiple edit
+// modals (e.g. opened in quick succession) can never collide with each other.
+async function editQuestion(id) {
+  const q = cachedQuestions.find((x) => x.id === id);
+  if (!q) return;
+  const isChoice = q.type === 'choice';
+  const choicesId = `edit-q-choices-${id}`;
+  const radioName = `edit-correct-choice-${id}`;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="card" style="max-width:480px; max-height:90vh; overflow-y:auto;">
+      <h3>問題を編集</h3>
+      <label>問題文</label>
+      <textarea id="edit-q-question-${id}" rows="2">${escapeHtml(q.question)}</textarea>
+      ${isChoice ? `
+        <label>選択肢（正解をラジオボタンで選択）</label>
+        <div id="${choicesId}"></div>
+        <button class="btn small secondary" type="button" onclick="addEditChoiceField('${choicesId}', '${radioName}', '', false)">選択肢を追加</button>
+      ` : `
+        <label>正解例（採点の参考用・任意）</label>
+        <input type="text" id="edit-q-correct-text-${id}" value="${escapeHtml(q.correctAnswer || '')}" />
+      `}
+      <label>教科（任意）</label>
+      <input type="text" id="edit-q-subject-${id}" value="${escapeHtml(q.subject || '')}" />
+      <label>単元（任意）</label>
+      <input type="text" id="edit-q-unit-${id}" value="${escapeHtml(q.unit || '')}" />
+      <label>難易度（任意）</label>
+      <input type="text" id="edit-q-difficulty-${id}" value="${escapeHtml(q.difficulty || '')}" />
+      <label>解説（任意）</label>
+      <input type="text" id="edit-q-explanation-${id}" value="${escapeHtml(q.explanation || '')}" />
+      <label>正解ポイント</label>
+      <input type="number" id="edit-q-points-${id}" value="${q.points}" min="0" />
+      <label>期限（任意）</label>
+      <input type="datetime-local" id="edit-q-due-at-${id}" value="${q.dueAt ? toLocalDateTimeValue(q.dueAt) : ''}" />
+      <label>期限切れの減点（任意）</label>
+      <input type="number" id="edit-q-late-penalty-${id}" value="${q.latePenalty || 0}" min="0" />
+      <label>対象の子ども</label>
+      <select id="edit-q-assigned-child-${id}"><option value="">誰でも</option></select>
+      <div class="btn-row">
+        <button class="btn secondary" onclick="this.closest('.overlay').remove()">キャンセル</button>
+        <button class="btn green" onclick="saveQuestionEdit(${id}, this)">保存する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  if (isChoice) {
+    q.choices.forEach((c, i) => addEditChoiceField(choicesId, radioName, c, i === q.correctIndex));
+  }
+
+  const children = await apiGet('/api/children');
+  const sel = document.getElementById(`edit-q-assigned-child-${id}`);
+  if (sel) {
+    sel.innerHTML = '<option value="">誰でも</option>' +
+      children.map((c) => `<option value="${c.id}" ${c.id === q.assignedChildId ? 'selected' : ''}>${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
+  }
+}
+
+async function saveQuestionEdit(id, btn) {
+  const q = cachedQuestions.find((x) => x.id === id);
+  if (!q) return;
+  const overlay = btn.closest('.overlay');
+  const dueAt = overlay.querySelector(`#edit-q-due-at-${id}`).value;
+  const assignedChildId = overlay.querySelector(`#edit-q-assigned-child-${id}`).value;
+  const payload = {
+    question: overlay.querySelector(`#edit-q-question-${id}`).value,
+    points: overlay.querySelector(`#edit-q-points-${id}`).value,
+    subject: overlay.querySelector(`#edit-q-subject-${id}`).value,
+    unit: overlay.querySelector(`#edit-q-unit-${id}`).value,
+    difficulty: overlay.querySelector(`#edit-q-difficulty-${id}`).value,
+    explanation: overlay.querySelector(`#edit-q-explanation-${id}`).value,
+    dueAt: dueAt || null,
+    latePenalty: overlay.querySelector(`#edit-q-late-penalty-${id}`).value,
+    assignedChildId: assignedChildId || null
+  };
+  if (q.type === 'choice') {
+    const rows = [...overlay.querySelectorAll(`#edit-q-choices-${id} > div`)];
+    payload.choices = rows.map((r) => r.querySelector('.edit-choice-text').value);
+    const checked = overlay.querySelector(`input[name=edit-correct-choice-${id}]:checked`);
+    payload.correctIndex = checked ? Number(checked.value) : undefined;
+  } else {
+    payload.correctAnswer = overlay.querySelector(`#edit-q-correct-text-${id}`).value;
+  }
+  try {
+    await apiPatch(`/api/questions/${id}`, payload);
+    overlay.remove();
+    showToast('更新しました');
+    loadQuestions();
+  } catch (e) { showToast(e.message); }
 }
 
 // ---------- Grading ----------
@@ -443,6 +571,8 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
     apiGet('/api/chore-logs?status=pending')
   ]);
   populateAdhocChildSelect(children);
+  cachedChores = allChores;
+  cachedChildrenForChores = children;
 
   const chores = allChores.filter((c) => (c.category || 'household') === category);
   const listEl = document.getElementById(listElId);
@@ -465,6 +595,7 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
           <div class="row-between">
             <span>${escapeHtml(c.name)} <span class="muted">(${typeLabel} / ${levelsLabel}${targetLabel ? ' / ' + targetLabel : ''})</span></span>
             <span>
+              <button class="btn small secondary" onclick="editChore(${c.id})">編集</button>
               <button class="btn small secondary" onclick="toggleChoreActive(${c.id}, ${!c.active})">${c.active ? '非公開にする' : '公開する'}</button>
               <button class="btn small secondary" onclick="deleteChore(${c.id})">削除</button>
             </span>
@@ -516,6 +647,90 @@ async function deleteChore(id) {
   await apiDelete(`/api/chores/${id}`);
   loadChores();
   loadStudyTasks();
+}
+
+async function editChore(id) {
+  const chore = cachedChores.find((c) => c.id === id);
+  if (!chore) return;
+  const isStudy = chore.category === 'study';
+  const isRoutine = chore.type === 'routine';
+  const levelsId = `edit-chore-levels-${id}`;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="card" style="max-width:480px; max-height:90vh; overflow-y:auto;">
+      <h3>${isStudy ? '勉強タスク' : 'お手伝い'}を編集</h3>
+      <label>内容</label>
+      <input type="text" id="edit-chore-name-${id}" value="${escapeHtml(chore.name)}" />
+      ${isStudy ? `
+        <label>教科（任意）</label>
+        <input type="text" id="edit-chore-subject-${id}" value="${escapeHtml(chore.subject || '')}" />
+        <label>単元・教材（任意）</label>
+        <input type="text" id="edit-chore-unit-${id}" value="${escapeHtml(chore.unit || '')}" />
+      ` : ''}
+      <label>ポイント（達成度レベルを使わない場合）</label>
+      <input type="number" id="edit-chore-points-${id}" value="${chore.points}" min="0" />
+      <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+      <div id="${levelsId}"></div>
+      <button class="btn small secondary" type="button" onclick="addLevelRow('${levelsId}')">レベルを追加</button>
+      ${isRoutine ? `
+        <label>期間（日数・任意）</label>
+        <input type="number" id="edit-chore-period-${id}" value="${chore.periodDays || ''}" min="0" />
+        <label>期間内の目標回数（任意）</label>
+        <input type="number" id="edit-chore-target-${id}" value="${chore.targetCount || ''}" min="0" />
+        <label>目標未達成時の減点</label>
+        <input type="number" id="edit-chore-penalty-${id}" value="${chore.periodPenalty || 0}" min="0" />
+      ` : ''}
+      <label>対象の子ども</label>
+      <select id="edit-chore-child-${id}"><option value="">誰でもOK</option></select>
+      <div class="btn-row">
+        <button class="btn secondary" onclick="this.closest('.overlay').remove()">キャンセル</button>
+        <button class="btn green" onclick="saveChoreEdit(${id}, this)">保存する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const levelsContainer = document.getElementById(levelsId);
+  (chore.levels || []).forEach(() => addLevelRow(levelsId));
+  [...levelsContainer.children].forEach((row, i) => {
+    const level = chore.levels[i];
+    row.querySelector('.level-label').value = level.label;
+    row.querySelector('.level-points').value = level.points;
+  });
+
+  const sel = document.getElementById(`edit-chore-child-${id}`);
+  sel.innerHTML = '<option value="">誰でもOK</option>' +
+    cachedChildrenForChores.map((c) => `<option value="${c.id}" ${c.id === chore.assignedChildId ? 'selected' : ''}>${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
+}
+
+async function saveChoreEdit(id, btn) {
+  const chore = cachedChores.find((c) => c.id === id);
+  if (!chore) return;
+  const overlay = btn.closest('.overlay');
+  const assignedChildId = overlay.querySelector(`#edit-chore-child-${id}`).value;
+  const payload = {
+    name: overlay.querySelector(`#edit-chore-name-${id}`).value,
+    points: overlay.querySelector(`#edit-chore-points-${id}`).value,
+    levels: collectLevels(`edit-chore-levels-${id}`),
+    assignedChildId: assignedChildId || null
+  };
+  if (chore.category === 'study') {
+    payload.subject = overlay.querySelector(`#edit-chore-subject-${id}`).value;
+    payload.unit = overlay.querySelector(`#edit-chore-unit-${id}`).value;
+  }
+  if (chore.type === 'routine') {
+    payload.periodDays = overlay.querySelector(`#edit-chore-period-${id}`).value;
+    payload.targetCount = overlay.querySelector(`#edit-chore-target-${id}`).value;
+    payload.periodPenalty = overlay.querySelector(`#edit-chore-penalty-${id}`).value;
+  }
+  try {
+    await apiPatch(`/api/chores/${id}`, payload);
+    overlay.remove();
+    showToast('更新しました');
+    loadChores();
+    loadStudyTasks();
+  } catch (e) { showToast(e.message); }
 }
 
 async function gradeChore(id, approved, levelIndex) {

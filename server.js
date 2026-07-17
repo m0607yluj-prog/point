@@ -2,7 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { withDb, nextId } = require('./lib/db');
+
+function generateToken() {
+  return crypto.randomUUID().replace(/-/g, '');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -124,16 +129,46 @@ app.patch('/api/settings/pin', ah(async (req, res) => {
 
 // ---------- Children ----------
 
+// Never sent here — this listing is fetched by both parent.html and child.html,
+// and child.html must not be able to see (or leak via devtools) siblings' tokens.
 app.get('/api/children', ah(async (req, res) => {
-  const children = await withDb((db) => db.children);
-  res.json(children);
+  const children = await withDb((db) => {
+    db.children.forEach((c) => { if (!c.token) c.token = generateToken(); });
+    return db.children;
+  });
+  res.json(children.map((c) => ({ ...c, token: undefined })));
+}));
+
+// Parent-only lookup: fetches one child's dedicated access token on demand,
+// so it's never included in the routinely-polled general listing above.
+app.get('/api/children/:id/token', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const child = await withDb((db) => {
+    const c = db.children.find((x) => x.id === id);
+    if (c && !c.token) c.token = generateToken();
+    return c;
+  });
+  if (!child) return res.status(404).json({ error: '見つかりません' });
+  res.json({ token: child.token });
+}));
+
+// Used by child.html's dedicated URL (child.html?token=...) to resolve directly
+// to one child's profile without exposing the full children list.
+app.get('/api/children/by-token/:token', ah(async (req, res) => {
+  const { token } = req.params;
+  const child = await withDb((db) => db.children.find((c) => c.token === token));
+  if (!child) return res.status(404).json({ error: 'リンクが正しくありません' });
+  res.json(child);
 }));
 
 app.post('/api/children', ah(async (req, res) => {
   const { name, avatar } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: '名前を入力してください' });
   const child = await withDb((db) => {
-    const c = { id: nextId(db.children), name: name.trim(), avatar: avatar || '🙂', points: 0, createdAt: now() };
+    const c = {
+      id: nextId(db.children), name: name.trim(), avatar: avatar || '🙂', points: 0,
+      token: generateToken(), createdAt: now()
+    };
     db.children.push(c);
     return c;
   });
@@ -169,7 +204,7 @@ app.post('/api/children/:id/points', ah(async (req, res) => {
   const result = await withDb((db) => {
     const c = db.children.find((x) => x.id === id);
     if (!c) return null;
-    c.points = Math.max(0, c.points + Number(delta));
+    c.points += Number(delta);
     return c;
   });
   if (!result) return res.status(404).json({ error: '見つかりません' });
@@ -750,7 +785,7 @@ app.listen(PORT, '0.0.0.0', () => {
     }
   }
   console.log('');
-  console.log('=== きっずポイント ===');
+  console.log('=== ポイント管理 ===');
   console.log(`このPCから: http://localhost:${PORT}`);
   addresses.forEach((addr) => console.log(`同じWi-Fi内の他の端末から: http://${addr}:${PORT}`));
   console.log('');

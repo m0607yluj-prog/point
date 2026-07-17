@@ -5,53 +5,45 @@ let allRewards = [];
 let allChores = [];
 let allChoreLogs = [];
 
-async function init() {
-  const savedId = sessionStorage.getItem('childId');
-  const children = await apiGet('/api/children');
-  if (savedId) {
-    const found = children.find((c) => c.id === Number(savedId));
-    if (found) {
-      currentChild = found;
-      showMain();
-      return;
-    }
-  }
-  renderProfilePicker(children);
+function getTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get('token');
 }
 
-function renderProfilePicker(children) {
-  const picker = document.getElementById('child-picker');
-  if (children.length === 0) {
-    picker.innerHTML = '<p class="muted">まだ登録されていません。保護者に登録してもらってね。</p>';
+async function init() {
+  const token = getTokenFromUrl() || sessionStorage.getItem('childToken');
+  if (!token) {
+    showBlocked();
     return;
   }
-  picker.innerHTML = children.map((c) => `
-    <div class="child-tile" onclick="selectChild(${c.id})">
-      <div class="avatar">${escapeHtml(c.avatar)}</div>
-      <div>${escapeHtml(c.name)}</div>
-      <div class="points-badge">${c.points} P</div>
-    </div>
-  `).join('');
+  try {
+    const child = await apiGet(`/api/children/by-token/${encodeURIComponent(token)}`);
+    if (!child || child.error || !child.id) {
+      showBlocked();
+      return;
+    }
+    sessionStorage.setItem('childToken', token);
+    currentChild = child;
+    await showMain();
+  } catch (e) {
+    showBlocked();
+  }
 }
 
-async function selectChild(id) {
-  sessionStorage.setItem('childId', id);
-  const children = await apiGet('/api/children');
-  currentChild = children.find((c) => c.id === id);
-  showMain();
-}
-
-function switchProfile() {
-  sessionStorage.removeItem('childId');
-  currentChild = null;
+function showBlocked() {
+  document.getElementById('blocked-screen').classList.remove('hidden');
+  document.getElementById('locked-out-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.add('hidden');
-  document.getElementById('profile-screen').classList.remove('hidden');
-  init();
+}
+
+function showLockedOut(points) {
+  document.getElementById('blocked-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.add('hidden');
+  document.getElementById('locked-out-screen').classList.remove('hidden');
+  document.getElementById('locked-points').textContent = `${points} P`;
 }
 
 async function showMain() {
-  document.getElementById('profile-screen').classList.add('hidden');
-  document.getElementById('main-screen').classList.remove('hidden');
+  document.getElementById('blocked-screen').classList.add('hidden');
   document.getElementById('my-avatar').textContent = currentChild.avatar;
   document.getElementById('my-name').textContent = currentChild.name;
   await refreshAll();
@@ -60,6 +52,13 @@ async function showMain() {
 async function refreshAll() {
   const children = await apiGet('/api/children');
   currentChild = children.find((c) => c.id === currentChild.id);
+
+  if (currentChild.points < 0) {
+    showLockedOut(currentChild.points);
+    return;
+  }
+  document.getElementById('locked-out-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.remove('hidden');
   document.getElementById('my-points').textContent = `${currentChild.points} P`;
 
   allQuestions = await apiGet('/api/questions?activeOnly=true');
@@ -119,7 +118,7 @@ function renderQuiz() {
   const container = document.getElementById('quiz-list');
 
   if (unanswered.length === 0) {
-    container.innerHTML = '<div class="card"><p class="muted">今はもんだいがないよ。あとでまた見てね！</p></div>';
+    container.innerHTML = '<div class="card"><p class="muted">今は問題がないよ。あとでまた見てね！</p></div>';
     return;
   }
 
@@ -139,7 +138,7 @@ function renderQuiz() {
           <div class="row-between"><h3>${escapeHtml(q.question)}</h3><span class="muted">${q.points}P</span></div>
           ${dueLabel}
           ${options}
-          <button class="btn green" onclick="submitChoice(${q.id})">こたえる</button>
+          <button class="btn green" onclick="submitChoice(${q.id})">答える</button>
         </div>
       `;
     } else {
@@ -147,8 +146,8 @@ function renderQuiz() {
         <div class="card" id="qcard-${q.id}">
           <div class="row-between"><h3>${escapeHtml(q.question)}</h3><span class="muted">${q.points}P</span></div>
           ${dueLabel}
-          <textarea rows="3" id="text-${q.id}" placeholder="こたえを かいてね"></textarea>
-          <button class="btn green" onclick="submitText(${q.id})">こたえる</button>
+          <textarea rows="3" id="text-${q.id}" placeholder="答えを書いてね"></textarea>
+          <button class="btn green" onclick="submitText(${q.id})">答える</button>
         </div>
       `;
     }
@@ -163,13 +162,13 @@ function markSelected(qid, index) {
 async function submitChoice(qid) {
   const card = document.getElementById(`qcard-${qid}`);
   const checked = card.querySelector('input[type=radio]:checked');
-  if (!checked) { showToast('こたえを えらんでね'); return; }
+  if (!checked) { showToast('答えを選んでね'); return; }
   await submitAnswer(qid, { answerIndex: Number(checked.value) });
 }
 
 async function submitText(qid) {
   const text = document.getElementById(`text-${qid}`).value.trim();
-  if (!text) { showToast('こたえを かいてね'); return; }
+  if (!text) { showToast('答えを書いてね'); return; }
   await submitAnswer(qid, { answerText: text });
 }
 
@@ -177,11 +176,11 @@ async function submitAnswer(qid, payload) {
   try {
     const result = await apiPost('/api/answers', { childId: currentChild.id, questionId: qid, ...payload });
     if (result.answer.status === 'correct') {
-      showToast(`せいかい！ +${result.answer.pointsAwarded}P 🎉`);
+      showToast(`正解！ +${result.answer.pointsAwarded}P 🎉`);
     } else if (result.answer.status === 'incorrect') {
-      showToast('ざんねん、まちがいだよ');
+      showToast('残念、間違いだよ');
     } else {
-      showToast('こたえを送ったよ。保護者が採点するまで待っててね');
+      showToast('答えを送ったよ。保護者が採点するまで待っててね');
     }
     await refreshAll();
   } catch (e) {
@@ -191,9 +190,9 @@ async function submitAnswer(qid, payload) {
 
 function renderChores() {
   renderChoreCategory('household', 'routine-chore-list', 'adhoc-chore-list', 'chore-history',
-    'いつでもできるおてつだいはまだないよ。', '今はおねがいされたおてつだいはないよ。', 'まだおてつだいをしていないよ。');
+    'いつでもできるお手伝いはまだないよ。', '今は依頼されたお手伝いはないよ。', 'まだお手伝いをしていないよ。');
   renderChoreCategory('study', 'study-routine-list', 'study-adhoc-list', 'study-history',
-    'いつでもできるべんきょうタスクはまだないよ。', '今はべんきょうタスクはないよ。', 'まだべんきょうをしていないよ。');
+    'いつでもできる勉強タスクはまだないよ。', '今は勉強タスクはないよ。', 'まだ勉強をしていないよ。');
 }
 
 function renderChoreCategory(category, routineElId, adhocElId, historyElId, routineEmptyMsg, adhocEmptyMsg, historyEmptyMsg) {
@@ -232,9 +231,9 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
     const sorted = [...relevantLogs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
     historyEl.innerHTML = sorted.map((l) => {
       const statusLabel = l.status === 'pending' ? '承認待ち'
-        : l.status === 'approved' ? (l.levelLabel || 'かんりょう')
+        : l.status === 'approved' ? (l.levelLabel || '完了')
         : l.status === 'period_penalty' ? `目標未達成 (${l.completedCount}/${l.targetCount}回)`
-        : 'やりなおし';
+        : 'やり直し';
       const badgeClass = l.status === 'pending' ? 'pending'
         : l.status === 'approved' ? 'correct'
         : l.status === 'period_penalty' ? 'expired'
@@ -272,7 +271,7 @@ function renderChoreRow(chore, log) {
   if (log && log.status === 'pending') {
     statusHtml = '<span class="badge pending">承認待ち</span>';
   } else if (log && log.status === 'approved') {
-    statusHtml = `<span class="badge correct">${escapeHtml(log.levelLabel || 'かんりょう！')}</span>`;
+    statusHtml = `<span class="badge correct">${escapeHtml(log.levelLabel || '完了！')}</span>`;
   } else {
     statusHtml = `<button class="btn green small" onclick="reportChore(${chore.id})">やった！</button>`;
   }
@@ -281,7 +280,7 @@ function renderChoreRow(chore, log) {
     : `${chore.points}P`;
   const progress = computePeriodProgress(chore);
   const progressLabel = progress
-    ? `<div class="muted">今のきかん: ${progress.completedCount}/${progress.targetCount}回（あと${progress.daysLeft}日）</div>`
+    ? `<div class="muted">今の期間: ${progress.completedCount}/${progress.targetCount}回（あと${progress.daysLeft}日）</div>`
     : '';
   return `
     <div class="list-item">
@@ -307,16 +306,16 @@ async function reportChore(choreId) {
 function renderResults() {
   const container = document.getElementById('results-list');
   if (allAnswers.length === 0) {
-    container.innerHTML = '<p class="muted">まだこたえていないよ。</p>';
+    container.innerHTML = '<p class="muted">まだ答えていないよ。</p>';
     return;
   }
   const sorted = [...allAnswers].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
   container.innerHTML = sorted.map((a) => {
     const q = allQuestions.find((x) => x.id === a.questionId) || { question: '(削除された問題)' };
     const statusLabel = a.status === 'pending' ? '採点中'
-      : a.status === 'correct' ? 'せいかい'
+      : a.status === 'correct' ? '正解'
       : a.status === 'expired' ? '期限切れ'
-      : 'まちがい';
+      : '間違い';
     const showExplanation = a.status !== 'pending' && q.explanation;
     return `
       <div class="list-item">
@@ -335,7 +334,7 @@ function renderRewards() {
   const container = document.getElementById('reward-list');
   const active = allRewards.filter((r) => r.active);
   if (active.length === 0) {
-    container.innerHTML = '<p class="muted">ごほうびはまだ登録されていないよ。</p>';
+    container.innerHTML = '<p class="muted">ご褒美はまだ登録されていないよ。</p>';
   } else {
     container.innerHTML = active.map((r) => {
       const outOfStock = r.stock !== null && r.stock <= 0;
@@ -345,9 +344,9 @@ function renderRewards() {
           <div class="emoji">${escapeHtml(r.emoji)}</div>
           <div>${escapeHtml(r.name)}</div>
           <div class="cost">${r.cost} P</div>
-          ${r.stock !== null ? `<div class="muted">のこり${r.stock}こ</div>` : ''}
+          ${r.stock !== null ? `<div class="muted">残り${r.stock}個</div>` : ''}
           <button class="btn orange small" ${canAfford ? '' : 'disabled'} onclick="redeem(${r.id})">
-            ${outOfStock ? '在庫なし' : 'こうかん'}
+            ${outOfStock ? '在庫なし' : '交換'}
           </button>
         </div>
       `;
@@ -357,7 +356,7 @@ function renderRewards() {
   apiGet(`/api/redemptions?childId=${currentChild.id}`).then((history) => {
     const el = document.getElementById('redemption-history');
     if (history.length === 0) {
-      el.innerHTML = '<p class="muted">まだこうかんしていないよ。</p>';
+      el.innerHTML = '<p class="muted">まだ交換していないよ。</p>';
       return;
     }
     const sorted = [...history].sort((a, b) => new Date(b.redeemedAt) - new Date(a.redeemedAt));
@@ -372,11 +371,11 @@ function renderRewards() {
 
 async function redeem(rewardId) {
   const reward = allRewards.find((r) => r.id === rewardId);
-  const ok = await askConfirm(`「${reward.name}」に${reward.cost}Pをつかう？`);
+  const ok = await askConfirm(`「${reward.name}」に${reward.cost}Pを使う？`);
   if (!ok) return;
   try {
     await apiPost('/api/redemptions', { childId: currentChild.id, rewardId });
-    showToast('こうかんしたよ！🎁');
+    showToast('交換したよ！🎁');
     await refreshAll();
   } catch (e) {
     showToast(e.message);
