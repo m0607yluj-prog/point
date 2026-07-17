@@ -65,7 +65,7 @@ async function refreshAll() {
   allQuestions = await apiGet('/api/questions?activeOnly=true');
   allAnswers = await apiGet(`/api/answers?childId=${currentChild.id}`);
   allRewards = await apiGet('/api/rewards');
-  allChores = await apiGet('/api/chores?activeOnly=true');
+  allChores = await apiGet('/api/chores');
   allChoreLogs = await apiGet(`/api/chore-logs?childId=${currentChild.id}`);
 
   renderQuiz();
@@ -95,6 +95,8 @@ function renderQuiz() {
   const eligible = allQuestions.filter((q) =>
     !answeredIds.has(q.id) && (!q.assignedChildId || q.assignedChildId === currentChild.id)
   );
+
+  applyTabUrgency('quiz', eligible);
 
   populateFilterSelect('quiz-filter-subject', eligible.map((q) => q.subject), '教科: すべて');
   populateFilterSelect('quiz-filter-unit', eligible.map((q) => q.unit), '単元: すべて');
@@ -188,13 +190,21 @@ async function submitAnswer(qid, payload) {
 }
 
 function renderChores() {
+  renderChoreCategory('household', 'routine-chore-list', 'adhoc-chore-list', 'chore-history',
+    'いつでもできるおてつだいはまだないよ。', '今はおねがいされたおてつだいはないよ。', 'まだおてつだいをしていないよ。');
+  renderChoreCategory('study', 'study-routine-list', 'study-adhoc-list', 'study-history',
+    'いつでもできるべんきょうタスクはまだないよ。', '今はべんきょうタスクはないよ。', 'まだべんきょうをしていないよ。');
+}
+
+function renderChoreCategory(category, routineElId, adhocElId, historyElId, routineEmptyMsg, adhocEmptyMsg, historyEmptyMsg) {
   const todayKeyClient = new Date().toISOString().slice(0, 10);
-  const activeChores = allChores.filter((c) => c.active);
+  const categoryChores = allChores.filter((c) => (c.category || 'household') === category);
+  const activeChores = categoryChores.filter((c) => c.active);
 
   const routine = activeChores.filter((c) => c.type === 'routine');
-  const routineEl = document.getElementById('routine-chore-list');
+  const routineEl = document.getElementById(routineElId);
   if (routine.length === 0) {
-    routineEl.innerHTML = '<p class="muted">いつでもできるおてつだいはまだないよ。</p>';
+    routineEl.innerHTML = `<p class="muted">${routineEmptyMsg}</p>`;
   } else {
     routineEl.innerHTML = routine.map((c) => {
       const log = allChoreLogs.find((l) => l.choreId === c.id && l.dateKey === todayKeyClient && l.status !== 'rejected');
@@ -203,9 +213,9 @@ function renderChores() {
   }
 
   const adhoc = activeChores.filter((c) => c.type === 'adhoc' && (!c.assignedChildId || c.assignedChildId === currentChild.id));
-  const adhocEl = document.getElementById('adhoc-chore-list');
+  const adhocEl = document.getElementById(adhocElId);
   if (adhoc.length === 0) {
-    adhocEl.innerHTML = '<p class="muted">今はおねがいされたおてつだいはないよ。</p>';
+    adhocEl.innerHTML = `<p class="muted">${adhocEmptyMsg}</p>`;
   } else {
     adhocEl.innerHTML = adhoc.map((c) => {
       const log = allChoreLogs.find((l) => l.choreId === c.id && l.status !== 'rejected');
@@ -213,18 +223,20 @@ function renderChores() {
     }).join('');
   }
 
-  const historyEl = document.getElementById('chore-history');
-  if (allChoreLogs.length === 0) {
-    historyEl.innerHTML = '<p class="muted">まだおてつだいをしていないよ。</p>';
+  const categoryChoreIds = new Set(categoryChores.map((c) => c.id));
+  const relevantLogs = allChoreLogs.filter((l) => categoryChoreIds.has(l.choreId));
+  const historyEl = document.getElementById(historyElId);
+  if (relevantLogs.length === 0) {
+    historyEl.innerHTML = `<p class="muted">${historyEmptyMsg}</p>`;
   } else {
-    const sorted = [...allChoreLogs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
+    const sorted = [...relevantLogs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
     historyEl.innerHTML = sorted.map((l) => {
-      const statusLabel = l.status === 'pending' ? '承認待ち' : l.status === 'approved' ? 'かんりょう' : 'やりなおし';
+      const statusLabel = l.status === 'pending' ? '承認待ち' : l.status === 'approved' ? (l.levelLabel || 'かんりょう') : 'やりなおし';
       const badgeClass = l.status === 'pending' ? 'pending' : l.status === 'approved' ? 'correct' : 'incorrect';
       return `
         <div class="list-item row-between">
           <span>${escapeHtml(l.choreName)}</span>
-          <span class="badge ${badgeClass}">${statusLabel}</span>
+          <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}${l.status === 'approved' && l.pointsAwarded ? ` +${l.pointsAwarded}P` : ''}</span>
         </div>
       `;
     }).join('');
@@ -236,13 +248,16 @@ function renderChoreRow(chore, log) {
   if (log && log.status === 'pending') {
     statusHtml = '<span class="badge pending">承認待ち</span>';
   } else if (log && log.status === 'approved') {
-    statusHtml = '<span class="badge correct">かんりょう！</span>';
+    statusHtml = `<span class="badge correct">${escapeHtml(log.levelLabel || 'かんりょう！')}</span>`;
   } else {
     statusHtml = `<button class="btn green small" onclick="reportChore(${chore.id})">やった！</button>`;
   }
+  const pointsLabel = (chore.levels && chore.levels.length > 0)
+    ? chore.levels.map((l) => `${escapeHtml(l.label)}${l.points}P`).join(' / ')
+    : `${chore.points}P`;
   return `
     <div class="list-item row-between">
-      <span>${escapeHtml(chore.name)} <span class="muted">${chore.points}P</span></span>
+      <span>${escapeHtml(chore.name)} <span class="muted">${pointsLabel}</span></span>
       ${statusHtml}
     </div>
   `;

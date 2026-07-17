@@ -34,6 +34,25 @@ function showToast(message) {
   toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2600);
 }
 
+// Highlights a tab button when any item in `items` (each with a `.dueAt` ISO
+// string or null) is due today (strong red) or within the next 3 days (soft red).
+function applyTabUrgency(tabId, items) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  if (!btn) return;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const in3DaysStr = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let dueToday = false;
+  let dueSoon = false;
+  items.forEach((item) => {
+    if (!item.dueAt) return;
+    const dStr = item.dueAt.slice(0, 10);
+    if (dStr <= todayStr) dueToday = true;
+    else if (dStr <= in3DaysStr) dueSoon = true;
+  });
+  btn.classList.toggle('due-today', dueToday);
+  btn.classList.toggle('due-soon', !dueToday && dueSoon);
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);

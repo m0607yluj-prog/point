@@ -36,6 +36,7 @@ function showTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
   if (tab === 'grading') loadGrading();
   if (tab === 'chores') loadChores();
+  if (tab === 'study') loadStudyTasks();
   if (tab === 'points') loadPoints();
   if (tab === 'rewards') loadRewards();
 }
@@ -64,7 +65,10 @@ async function loadChildren() {
   populateAdhocChildSelect(children);
 }
 
-const CHILD_TARGET_SELECT_IDS = ['new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child'];
+const CHILD_TARGET_SELECT_IDS = [
+  'new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child',
+  'new-study-task-child', 'bulk-study-csv-assigned-child'
+];
 
 function populateAdhocChildSelect(children) {
   CHILD_TARGET_SELECT_IDS.forEach((id) => {
@@ -197,6 +201,7 @@ async function loadQuestions() {
   const [questions, children] = await Promise.all([apiGet('/api/questions'), apiGet('/api/children')]);
   cachedQuestions = questions;
   cachedChildrenForQuestions = children;
+  applyTabUrgency('questions', questions.filter((q) => q.active));
   populateFilterSelect('filter-subject', questions.map((q) => q.subject), '教科: すべて');
   populateFilterSelect('filter-unit', questions.map((q) => q.unit), '単元: すべて');
   populateFilterSelect('filter-difficulty', questions.map((q) => q.difficulty), '難易度: すべて');
@@ -307,15 +312,43 @@ async function gradeAnswer(id, correct) {
   loadGrading();
 }
 
-// ---------- Chores (お手伝い) ----------
+// ---------- Chores (お手伝い・勉強タスク) ----------
+// Both tabs share the same `chores`/`chore-logs` API, filtered by `category`.
+
+function addLevelRow(containerId) {
+  const container = document.getElementById(containerId);
+  const row = document.createElement('div');
+  row.className = 'row-between';
+  row.style.marginBottom = '6px';
+  row.innerHTML = `
+    <input type="text" class="level-label" placeholder="ラベル (例: かんぺき)" style="flex:1; margin:0 4px 0 0;" />
+    <input type="number" class="level-points" placeholder="ポイント" min="0" style="width:90px; margin:0 4px 0 0;" />
+    <button type="button" class="btn small secondary" onclick="this.parentElement.remove()">×</button>
+  `;
+  container.appendChild(row);
+}
+
+function collectLevels(containerId) {
+  const container = document.getElementById(containerId);
+  return [...container.children].map((row) => ({
+    label: row.querySelector('.level-label').value,
+    points: row.querySelector('.level-points').value
+  })).filter((l) => l.label.trim().length > 0);
+}
+
+function clearLevelRows(containerId) {
+  document.getElementById(containerId).innerHTML = '';
+}
 
 async function addRoutineChore() {
   const name = document.getElementById('new-routine-chore-name').value;
   const points = document.getElementById('new-routine-chore-points').value;
+  const levels = collectLevels('routine-levels');
   if (!name.trim()) { showToast('お手伝いの名前を入力してください'); return; }
   try {
-    await apiPost('/api/chores', { name, type: 'routine', points });
+    await apiPost('/api/chores', { name, type: 'routine', points, levels, category: 'household' });
     document.getElementById('new-routine-chore-name').value = '';
+    clearLevelRows('routine-levels');
     showToast('追加しました');
     loadChores();
   } catch (e) { showToast(e.message); }
@@ -325,56 +358,116 @@ async function addAdhocChore() {
   const name = document.getElementById('new-adhoc-chore-name').value;
   const points = document.getElementById('new-adhoc-chore-points').value;
   const assignedChildId = document.getElementById('new-adhoc-chore-child').value;
+  const levels = collectLevels('adhoc-levels');
   if (!name.trim()) { showToast('お手伝いの名前を入力してください'); return; }
   try {
-    await apiPost('/api/chores', { name, type: 'adhoc', points, assignedChildId: assignedChildId || null });
+    await apiPost('/api/chores', { name, type: 'adhoc', points, levels, assignedChildId: assignedChildId || null, category: 'household' });
     document.getElementById('new-adhoc-chore-name').value = '';
+    clearLevelRows('adhoc-levels');
     showToast('依頼しました');
     loadChores();
   } catch (e) { showToast(e.message); }
 }
 
+async function addStudyTask() {
+  const name = document.getElementById('new-study-task-name').value;
+  const subject = document.getElementById('new-study-task-subject').value;
+  const unit = document.getElementById('new-study-task-unit').value;
+  const points = document.getElementById('new-study-task-points').value;
+  const assignedChildId = document.getElementById('new-study-task-child').value;
+  const levels = collectLevels('study-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', {
+      name, type: 'adhoc', points, levels, subject, unit,
+      assignedChildId: assignedChildId || null, category: 'study'
+    });
+    document.getElementById('new-study-task-name').value = '';
+    document.getElementById('new-study-task-subject').value = '';
+    document.getElementById('new-study-task-unit').value = '';
+    clearLevelRows('study-levels');
+    showToast('追加しました');
+    loadStudyTasks();
+  } catch (e) { showToast(e.message); }
+}
+
+async function addBulkCsvStudyTasks() {
+  const csvText = document.getElementById('bulk-study-csv-text').value;
+  const assignedChildId = document.getElementById('bulk-study-csv-assigned-child').value;
+  if (!csvText.trim()) { showToast('CSVを入力してください'); return; }
+  try {
+    const created = await apiPost('/api/chores/bulk-csv', { csvText, assignedChildId: assignedChildId || null });
+    document.getElementById('bulk-study-csv-text').value = '';
+    showToast(`${created.length}件を登録しました`);
+    loadStudyTasks();
+  } catch (e) { showToast(e.message); }
+}
+
 async function loadChores() {
-  const [chores, children] = await Promise.all([apiGet('/api/chores'), apiGet('/api/children')]);
+  await renderChoreCategory('household', 'chores-list', 'chore-approval-list', 'まだお手伝いが登録されていません。');
+}
+
+async function loadStudyTasks() {
+  await renderChoreCategory('study', 'study-tasks-list', 'study-approval-list', 'まだ勉強タスクが登録されていません。');
+}
+
+async function renderChoreCategory(category, listElId, approvalElId, emptyMessage) {
+  const [allChores, children, pendingLogs] = await Promise.all([
+    apiGet('/api/chores'),
+    apiGet('/api/children'),
+    apiGet('/api/chore-logs?status=pending')
+  ]);
   populateAdhocChildSelect(children);
 
-  const el = document.getElementById('chores-list');
+  const chores = allChores.filter((c) => (c.category || 'household') === category);
+  const listEl = document.getElementById(listElId);
   if (chores.length === 0) {
-    el.innerHTML = '<p class="muted">まだお手伝いが登録されていません。</p>';
+    listEl.innerHTML = `<p class="muted">${emptyMessage}</p>`;
   } else {
-    el.innerHTML = chores.map((c) => {
+    listEl.innerHTML = chores.map((c) => {
       const assignedChild = children.find((x) => x.id === c.assignedChildId);
       const typeLabel = c.type === 'routine' ? '定型' : '随時';
       const targetLabel = c.type === 'adhoc' ? (assignedChild ? `${escapeHtml(assignedChild.name)}へ依頼` : '誰でもOK') : '';
+      const tags = [c.subject, c.unit].filter((t) => t).map((t) => escapeHtml(t)).join(' / ');
+      const levelsLabel = (c.levels && c.levels.length > 0)
+        ? c.levels.map((l) => `${escapeHtml(l.label)}(${l.points}P)`).join(' / ')
+        : `${c.points}P`;
       return `
-        <div class="list-item row-between">
-          <span>${escapeHtml(c.name)} <span class="muted">(${typeLabel} / ${c.points}P${targetLabel ? ' / ' + targetLabel : ''})</span></span>
-          <span>
-            <button class="btn small secondary" onclick="toggleChoreActive(${c.id}, ${!c.active})">${c.active ? '非公開にする' : '公開する'}</button>
-            <button class="btn small secondary" onclick="deleteChore(${c.id})">削除</button>
-          </span>
+        <div class="list-item">
+          <div class="row-between">
+            <span>${escapeHtml(c.name)} <span class="muted">(${typeLabel} / ${levelsLabel}${targetLabel ? ' / ' + targetLabel : ''})</span></span>
+            <span>
+              <button class="btn small secondary" onclick="toggleChoreActive(${c.id}, ${!c.active})">${c.active ? '非公開にする' : '公開する'}</button>
+              <button class="btn small secondary" onclick="deleteChore(${c.id})">削除</button>
+            </span>
+          </div>
+          ${tags ? `<div class="muted">${tags}</div>` : ''}
         </div>
       `;
     }).join('');
   }
 
-  loadChoreApprovals(children);
-}
-
-async function loadChoreApprovals(children) {
-  const pending = await apiGet('/api/chore-logs?status=pending');
-  const el = document.getElementById('chore-approval-list');
-  if (pending.length === 0) {
-    el.innerHTML = '<p class="muted">承認待ちのお手伝いはありません。</p>';
+  const relevantLogs = pendingLogs.filter((l) => {
+    const chore = allChores.find((c) => c.id === l.choreId);
+    return chore && (chore.category || 'household') === category;
+  });
+  const approvalEl = document.getElementById(approvalElId);
+  if (relevantLogs.length === 0) {
+    approvalEl.innerHTML = '<p class="muted">承認待ちはありません。</p>';
     return;
   }
-  el.innerHTML = pending.map((l) => {
+  approvalEl.innerHTML = relevantLogs.map((l) => {
     const child = children.find((c) => c.id === l.childId) || { name: '(不明)' };
+    const chore = allChores.find((c) => c.id === l.choreId);
+    const levels = (chore && chore.levels) || [];
+    const approveButtons = levels.length > 0
+      ? levels.map((lv, i) => `<button class="btn green small" onclick="gradeChore(${l.id}, true, ${i})">${escapeHtml(lv.label)} (+${lv.points}P)</button>`).join('')
+      : `<button class="btn green small" onclick="gradeChore(${l.id}, true)">承認してポイント付与</button>`;
     return `
       <div class="list-item">
         <div>${escapeHtml(child.name)} さんが「${escapeHtml(l.choreName)}」を報告しました</div>
         <div class="btn-row">
-          <button class="btn green small" onclick="gradeChore(${l.id}, true)">承認してポイント付与</button>
+          ${approveButtons}
           <button class="btn pink small" onclick="gradeChore(${l.id}, false)">やり直し</button>
         </div>
       </div>
@@ -385,19 +478,26 @@ async function loadChoreApprovals(children) {
 async function toggleChoreActive(id, active) {
   await apiPatch(`/api/chores/${id}`, { active });
   loadChores();
+  loadStudyTasks();
 }
 
 async function deleteChore(id) {
-  const ok = await askConfirm('このお手伝いを削除しますか？');
+  const ok = await askConfirm('削除しますか？');
   if (!ok) return;
   await apiDelete(`/api/chores/${id}`);
   loadChores();
+  loadStudyTasks();
 }
 
-async function gradeChore(id, approved) {
-  await apiPatch(`/api/chore-logs/${id}/grade`, { approved });
-  showToast(approved ? 'ポイントを付与しました' : 'やり直しにしました');
-  loadChores();
+async function gradeChore(id, approved, levelIndex) {
+  const payload = { approved };
+  if (levelIndex !== undefined) payload.levelIndex = levelIndex;
+  try {
+    await apiPatch(`/api/chore-logs/${id}/grade`, payload);
+    showToast(approved ? 'ポイントを付与しました' : 'やり直しにしました');
+    loadChores();
+    loadStudyTasks();
+  } catch (e) { showToast(e.message); }
 }
 
 // ---------- Points ----------

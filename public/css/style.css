@@ -111,6 +111,16 @@ label { font-weight: bold; font-size: 0.9rem; display: block; margin-top: 8px; }
   white-space: nowrap;
 }
 .tab-btn.active { background: var(--bg); color: var(--purple); }
+.tab-btn.due-soon { background: rgba(224, 49, 49, 0.45); color: white; }
+.tab-btn.due-today {
+  background: #e03131;
+  color: white;
+  animation: due-today-pulse 1.6s ease-in-out infinite;
+}
+@keyframes due-today-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 49, 49, 0.6); }
+  50% { box-shadow: 0 0 0 5px rgba(224, 49, 49, 0); }
+}
 
 .hidden { display: none !important; }
 

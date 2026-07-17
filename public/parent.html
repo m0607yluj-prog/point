@@ -29,6 +29,7 @@
     <button class="tab-btn" data-tab="questions" onclick="showTab('questions')">📝 問題作成</button>
     <button class="tab-btn" data-tab="grading" onclick="showTab('grading')">✅ 採点</button>
     <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
+    <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強タスク</button>
     <button class="tab-btn" data-tab="points" onclick="showTab('points')">⭐ ポイント</button>
     <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ご褒美</button>
     <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">⚙️ 設定</button>
@@ -156,8 +157,11 @@
         <p class="muted">いつでも実行できる、くり返し系のお手伝い（1日1回まで報告できます）</p>
         <label>お手伝い名</label>
         <input type="text" id="new-routine-chore-name" placeholder="例: お風呂そうじ" />
-        <label>ポイント</label>
+        <label>ポイント（達成度レベルを使わない場合）</label>
         <input type="number" id="new-routine-chore-points" value="10" min="0" />
+        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+        <div id="routine-levels"></div>
+        <button class="btn small secondary" type="button" onclick="addLevelRow('routine-levels')">レベルを追加</button>
         <button class="btn" onclick="addRoutineChore()">追加する</button>
       </div>
       <div class="card">
@@ -165,8 +169,11 @@
         <p class="muted">1回限りのお手伝い。特定の子どもに割り当てることもできます</p>
         <label>お手伝い名</label>
         <input type="text" id="new-adhoc-chore-name" placeholder="例: 買い物についてきて" />
-        <label>ポイント</label>
+        <label>ポイント（達成度レベルを使わない場合）</label>
         <input type="number" id="new-adhoc-chore-points" value="10" min="0" />
+        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+        <div id="adhoc-levels"></div>
+        <button class="btn small secondary" type="button" onclick="addLevelRow('adhoc-levels')">レベルを追加</button>
         <label>対象の子ども</label>
         <select id="new-adhoc-chore-child">
           <option value="">誰でもOK</option>
@@ -176,6 +183,47 @@
       <div class="card">
         <h3>登録済みのお手伝い</h3>
         <div id="chores-list"></div>
+      </div>
+    </div>
+
+    <div id="tab-study" class="tab-content hidden">
+      <div class="card">
+        <h3>承認待ちの勉強タスク</h3>
+        <div id="study-approval-list"></div>
+      </div>
+      <div class="card">
+        <h3>勉強タスクを追加</h3>
+        <p class="muted">例: 国語 ワーク12〜20ページ / チャレンジタッチ 8月号Lesson1</p>
+        <label>内容</label>
+        <input type="text" id="new-study-task-name" placeholder="例: ワーク12〜20ページ" />
+        <label>教科（任意）</label>
+        <input type="text" id="new-study-task-subject" placeholder="例: 国語" />
+        <label>単元・教材（任意）</label>
+        <input type="text" id="new-study-task-unit" placeholder="例: チャレンジタッチ 8月号Lesson1" />
+        <label>ポイント（達成度レベルを使わない場合）</label>
+        <input type="number" id="new-study-task-points" value="10" min="0" />
+        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+        <div id="study-levels"></div>
+        <button class="btn small secondary" type="button" onclick="addLevelRow('study-levels')">レベルを追加</button>
+        <label>対象の子ども</label>
+        <select id="new-study-task-child">
+          <option value="">誰でもOK</option>
+        </select>
+        <button class="btn" onclick="addStudyTask()">追加する</button>
+      </div>
+      <div class="card">
+        <h3>CSVで一括登録</h3>
+        <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
+        <textarea id="bulk-study-csv-text" rows="8" placeholder="教科,単元,内容,ポイント&#10;国語,ワーク,12〜20ページ,10&#10;算数,チャレンジタッチ,8月号Lesson1,5"></textarea>
+        <label>対象の子ども</label>
+        <select id="bulk-study-csv-assigned-child">
+          <option value="">誰でもOK</option>
+        </select>
+        <button class="btn green" onclick="addBulkCsvStudyTasks()">CSVを登録する</button>
+      </div>
+      <div class="card">
+        <h3>登録済みの勉強タスク</h3>
+        <div id="study-tasks-list"></div>
       </div>
     </div>
 

@@ -524,17 +524,28 @@ app.post('/api/redemptions', ah(async (req, res) => {
   res.json(result);
 }));
 
-// ---------- Chores (お手伝い) ----------
+// ---------- Chores (お手伝い・勉強タスク) ----------
+
+// Achievement levels let a chore be graded at multiple tiers (e.g. かんぺき/
+// まあまあ/もうすこし) each worth different points, instead of a single
+// binary approve/reject. An empty array falls back to the plain `points` field.
+function normalizeLevels(levels) {
+  if (!Array.isArray(levels)) return [];
+  return levels
+    .map((l) => ({ label: String(l && l.label || '').trim(), points: Math.max(0, Number(l && l.points) || 0) }))
+    .filter((l) => l.label.length > 0);
+}
 
 app.get('/api/chores', ah(async (req, res) => {
-  const { activeOnly } = req.query;
+  const { activeOnly, category } = req.query;
   const chores = await withDb((db) => db.chores);
-  const filtered = activeOnly === 'true' ? chores.filter((c) => c.active) : chores;
+  let filtered = activeOnly === 'true' ? chores.filter((c) => c.active) : chores;
+  if (category) filtered = filtered.filter((c) => (c.category || 'household') === category);
   res.json(filtered);
 }));
 
 app.post('/api/chores', ah(async (req, res) => {
-  const { name, type, points, assignedChildId } = req.body;
+  const { name, type, points, assignedChildId, category, subject, unit, levels } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'お手伝いの名前を入力してください' });
   if (type !== 'routine' && type !== 'adhoc') return res.status(400).json({ error: '種類が不正です' });
   const chore = await withDb((db) => {
@@ -544,6 +555,10 @@ app.post('/api/chores', ah(async (req, res) => {
       type,
       points: Math.max(0, Number(points) || 0),
       assignedChildId: type === 'adhoc' && assignedChildId ? Number(assignedChildId) : null,
+      category: category === 'study' ? 'study' : 'household',
+      subject: (subject || '').trim(),
+      unit: (unit || '').trim(),
+      levels: normalizeLevels(levels),
       active: true,
       createdAt: now()
     };
@@ -564,6 +579,10 @@ app.patch('/api/chores/:id', ah(async (req, res) => {
     if (updates.assignedChildId !== undefined) {
       item.assignedChildId = updates.assignedChildId ? Number(updates.assignedChildId) : null;
     }
+    if (updates.category !== undefined) item.category = updates.category === 'study' ? 'study' : 'household';
+    if (updates.subject !== undefined) item.subject = String(updates.subject).trim();
+    if (updates.unit !== undefined) item.unit = String(updates.unit).trim();
+    if (updates.levels !== undefined) item.levels = normalizeLevels(updates.levels);
     if (updates.active !== undefined) item.active = Boolean(updates.active);
     return item;
   });
@@ -577,6 +596,56 @@ app.delete('/api/chores/:id', ah(async (req, res) => {
     db.chores = db.chores.filter((x) => x.id !== id);
   });
   res.json({ ok: true });
+}));
+
+// Bulk-create study-task chores from a pasted CSV: 教科,単元,内容,ポイント
+// (header row required; columns matched by name).
+app.post('/api/chores/bulk-csv', ah(async (req, res) => {
+  const { csvText, assignedChildId } = req.body;
+  if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
+
+  const rows = parseCsv(csvText).filter((row) => row.some((cell) => cell.trim().length > 0));
+  if (rows.length < 2) return res.status(400).json({ error: 'ヘッダー行とデータ行が必要です' });
+
+  const header = rows[0].map((h) => h.trim());
+  const colIndex = (name) => header.indexOf(name);
+  const contentIdx = colIndex('内容');
+  if (contentIdx === -1) return res.status(400).json({ error: 'ヘッダーに「内容」列が見つかりません' });
+  const subjectIdx = colIndex('教科');
+  const unitIdx = colIndex('単元');
+  const pointsIdx = colIndex('ポイント');
+
+  const dataRows = rows.slice(1);
+  const parsedItems = dataRows
+    .map((row) => ({
+      name: (row[contentIdx] || '').trim(),
+      subject: subjectIdx === -1 ? '' : (row[subjectIdx] || '').trim(),
+      unit: unitIdx === -1 ? '' : (row[unitIdx] || '').trim(),
+      points: pointsIdx === -1 ? 0 : Math.max(0, Number((row[pointsIdx] || '').trim()) || 0)
+    }))
+    .filter((item) => item.name.length > 0);
+  if (parsedItems.length === 0) return res.status(400).json({ error: '内容が見つかりませんでした' });
+
+  const created = await withDb((db) => {
+    return parsedItems.map((parsed) => {
+      const item = {
+        id: nextId(db.chores),
+        name: parsed.name,
+        type: 'adhoc',
+        points: parsed.points,
+        assignedChildId: assignedChildId ? Number(assignedChildId) : null,
+        category: 'study',
+        subject: parsed.subject,
+        unit: parsed.unit,
+        levels: [],
+        active: true,
+        createdAt: now()
+      };
+      db.chores.push(item);
+      return item;
+    });
+  });
+  res.json(created);
 }));
 
 // ---------- Chore logs (お手伝いの完了報告・承認) ----------
@@ -632,7 +701,7 @@ app.post('/api/chore-logs', ah(async (req, res) => {
 // Parent approves or rejects a pending chore report
 app.patch('/api/chore-logs/:id/grade', ah(async (req, res) => {
   const id = Number(req.params.id);
-  const { approved } = req.body;
+  const { approved, levelIndex } = req.body;
   const result = await withDb((db) => {
     const log = db.choreLogs.find((l) => l.id === id);
     if (!log) return null;
@@ -642,8 +711,17 @@ app.patch('/api/chore-logs/:id/grade', ah(async (req, res) => {
     log.status = approved ? 'approved' : 'rejected';
     log.gradedAt = now();
     if (approved && chore && child) {
-      log.pointsAwarded = chore.points;
-      child.points += chore.points;
+      const levels = chore.levels || [];
+      if (levels.length > 0) {
+        const level = levels[Number(levelIndex)];
+        if (!level) return { error: '達成度レベルを指定してください' };
+        log.pointsAwarded = level.points;
+        log.levelLabel = level.label;
+        child.points += level.points;
+      } else {
+        log.pointsAwarded = chore.points;
+        child.points += chore.points;
+      }
       if (chore.type === 'adhoc') chore.active = false;
     }
     return { log, child };
