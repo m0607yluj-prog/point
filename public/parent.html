@@ -212,6 +212,32 @@
         <button class="btn" onclick="addStudyTask()">追加する</button>
       </div>
       <div class="card">
+        <h3>繰り返しタスクを追加</h3>
+        <p class="muted">例: 7日間で5回やる、できないと減点。1回ごとのポイントは達成のたびに付与されます。</p>
+        <label>内容</label>
+        <input type="text" id="new-recurring-task-name" placeholder="例: 音読" />
+        <label>教科（任意）</label>
+        <input type="text" id="new-recurring-task-subject" placeholder="例: 国語" />
+        <label>単元・教材（任意）</label>
+        <input type="text" id="new-recurring-task-unit" placeholder="例: 音読カード" />
+        <label>1回ごとのポイント（達成度レベルを使わない場合）</label>
+        <input type="number" id="new-recurring-task-points" value="10" min="0" />
+        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+        <div id="recurring-levels"></div>
+        <button class="btn small secondary" type="button" onclick="addLevelRow('recurring-levels')">レベルを追加</button>
+        <label>期間（日数）</label>
+        <input type="number" id="new-recurring-task-period" value="7" min="1" />
+        <label>期間内の目標回数</label>
+        <input type="number" id="new-recurring-task-target" value="5" min="1" />
+        <label>目標未達成時の減点</label>
+        <input type="number" id="new-recurring-task-penalty" value="10" min="0" />
+        <label>対象の子ども</label>
+        <select id="new-recurring-task-child">
+          <option value="">誰でもOK</option>
+        </select>
+        <button class="btn" onclick="addRecurringStudyTask()">追加する</button>
+      </div>
+      <div class="card">
         <h3>CSVで一括登録</h3>
         <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
         <textarea id="bulk-study-csv-text" rows="8" placeholder="教科,単元,内容,ポイント&#10;国語,ワーク,12〜20ページ,10&#10;算数,チャレンジタッチ,8月号Lesson1,5"></textarea>

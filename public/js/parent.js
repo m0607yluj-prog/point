@@ -67,7 +67,7 @@ async function loadChildren() {
 
 const CHILD_TARGET_SELECT_IDS = [
   'new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child',
-  'new-study-task-child', 'bulk-study-csv-assigned-child'
+  'new-study-task-child', 'bulk-study-csv-assigned-child', 'new-recurring-task-child'
 ];
 
 function populateAdhocChildSelect(children) {
@@ -391,6 +391,31 @@ async function addStudyTask() {
   } catch (e) { showToast(e.message); }
 }
 
+async function addRecurringStudyTask() {
+  const name = document.getElementById('new-recurring-task-name').value;
+  const subject = document.getElementById('new-recurring-task-subject').value;
+  const unit = document.getElementById('new-recurring-task-unit').value;
+  const points = document.getElementById('new-recurring-task-points').value;
+  const periodDays = document.getElementById('new-recurring-task-period').value;
+  const targetCount = document.getElementById('new-recurring-task-target').value;
+  const periodPenalty = document.getElementById('new-recurring-task-penalty').value;
+  const assignedChildId = document.getElementById('new-recurring-task-child').value;
+  const levels = collectLevels('recurring-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', {
+      name, type: 'routine', points, levels, subject, unit, periodDays, targetCount, periodPenalty,
+      assignedChildId: assignedChildId || null, category: 'study'
+    });
+    document.getElementById('new-recurring-task-name').value = '';
+    document.getElementById('new-recurring-task-subject').value = '';
+    document.getElementById('new-recurring-task-unit').value = '';
+    clearLevelRows('recurring-levels');
+    showToast('追加しました');
+    loadStudyTasks();
+  } catch (e) { showToast(e.message); }
+}
+
 async function addBulkCsvStudyTasks() {
   const csvText = document.getElementById('bulk-study-csv-text').value;
   const assignedChildId = document.getElementById('bulk-study-csv-assigned-child').value;
@@ -427,11 +452,14 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
     listEl.innerHTML = chores.map((c) => {
       const assignedChild = children.find((x) => x.id === c.assignedChildId);
       const typeLabel = c.type === 'routine' ? '定型' : '随時';
-      const targetLabel = c.type === 'adhoc' ? (assignedChild ? `${escapeHtml(assignedChild.name)}へ依頼` : '誰でもOK') : '';
+      const targetLabel = assignedChild ? `${escapeHtml(assignedChild.name)}へ` : (c.type === 'adhoc' ? '誰でもOK' : '');
       const tags = [c.subject, c.unit].filter((t) => t).map((t) => escapeHtml(t)).join(' / ');
       const levelsLabel = (c.levels && c.levels.length > 0)
         ? c.levels.map((l) => `${escapeHtml(l.label)}(${l.points}P)`).join(' / ')
         : `${c.points}P`;
+      const periodLabel = (c.periodDays > 0 && c.targetCount > 0)
+        ? `${c.periodDays}日間で${c.targetCount}回未満だと-${c.periodPenalty}P`
+        : '';
       return `
         <div class="list-item">
           <div class="row-between">
@@ -442,6 +470,7 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
             </span>
           </div>
           ${tags ? `<div class="muted">${tags}</div>` : ''}
+          ${periodLabel ? `<div class="muted">${periodLabel}</div>` : ''}
         </div>
       `;
     }).join('');

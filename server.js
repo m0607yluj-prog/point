@@ -545,7 +545,10 @@ app.get('/api/chores', ah(async (req, res) => {
 }));
 
 app.post('/api/chores', ah(async (req, res) => {
-  const { name, type, points, assignedChildId, category, subject, unit, levels } = req.body;
+  const {
+    name, type, points, assignedChildId, category, subject, unit, levels,
+    periodDays, targetCount, periodPenalty
+  } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'お手伝いの名前を入力してください' });
   if (type !== 'routine' && type !== 'adhoc') return res.status(400).json({ error: '種類が不正です' });
   const chore = await withDb((db) => {
@@ -554,11 +557,14 @@ app.post('/api/chores', ah(async (req, res) => {
       name: name.trim(),
       type,
       points: Math.max(0, Number(points) || 0),
-      assignedChildId: type === 'adhoc' && assignedChildId ? Number(assignedChildId) : null,
+      assignedChildId: assignedChildId ? Number(assignedChildId) : null,
       category: category === 'study' ? 'study' : 'household',
       subject: (subject || '').trim(),
       unit: (unit || '').trim(),
       levels: normalizeLevels(levels),
+      periodDays: type === 'routine' ? Math.max(0, Number(periodDays) || 0) : 0,
+      targetCount: type === 'routine' ? Math.max(0, Number(targetCount) || 0) : 0,
+      periodPenalty: Math.max(0, Number(periodPenalty) || 0),
       active: true,
       createdAt: now()
     };
@@ -583,6 +589,9 @@ app.patch('/api/chores/:id', ah(async (req, res) => {
     if (updates.subject !== undefined) item.subject = String(updates.subject).trim();
     if (updates.unit !== undefined) item.unit = String(updates.unit).trim();
     if (updates.levels !== undefined) item.levels = normalizeLevels(updates.levels);
+    if (updates.periodDays !== undefined) item.periodDays = Math.max(0, Number(updates.periodDays) || 0);
+    if (updates.targetCount !== undefined) item.targetCount = Math.max(0, Number(updates.targetCount) || 0);
+    if (updates.periodPenalty !== undefined) item.periodPenalty = Math.max(0, Number(updates.periodPenalty) || 0);
     if (updates.active !== undefined) item.active = Boolean(updates.active);
     return item;
   });
@@ -672,11 +681,12 @@ app.post('/api/chore-logs', ah(async (req, res) => {
 
     if (chore.type === 'routine') {
       const already = db.choreLogs.find(
-        (l) => l.choreId === chore.id && l.childId === child.id && l.dateKey === todayKey() && l.status !== 'rejected'
+        (l) => l.choreId === chore.id && l.childId === child.id && l.dateKey === todayKey() &&
+          (l.status === 'pending' || l.status === 'approved')
       );
       if (already) return { error: '今日はすでに報告済みです' };
     } else {
-      const already = db.choreLogs.find((l) => l.choreId === chore.id && l.status !== 'rejected');
+      const already = db.choreLogs.find((l) => l.choreId === chore.id && (l.status === 'pending' || l.status === 'approved'));
       if (already) return { error: 'このお手伝いはすでに報告されています' };
     }
 

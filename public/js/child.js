@@ -231,16 +231,40 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
   } else {
     const sorted = [...relevantLogs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
     historyEl.innerHTML = sorted.map((l) => {
-      const statusLabel = l.status === 'pending' ? '承認待ち' : l.status === 'approved' ? (l.levelLabel || 'かんりょう') : 'やりなおし';
-      const badgeClass = l.status === 'pending' ? 'pending' : l.status === 'approved' ? 'correct' : 'incorrect';
+      const statusLabel = l.status === 'pending' ? '承認待ち'
+        : l.status === 'approved' ? (l.levelLabel || 'かんりょう')
+        : l.status === 'period_penalty' ? `目標未達成 (${l.completedCount}/${l.targetCount}回)`
+        : 'やりなおし';
+      const badgeClass = l.status === 'pending' ? 'pending'
+        : l.status === 'approved' ? 'correct'
+        : l.status === 'period_penalty' ? 'expired'
+        : 'incorrect';
       return `
         <div class="list-item row-between">
           <span>${escapeHtml(l.choreName)}</span>
-          <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}${l.status === 'approved' && l.pointsAwarded ? ` +${l.pointsAwarded}P` : ''}</span>
+          <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}${l.pointsAwarded ? ` ${l.pointsAwarded > 0 ? '+' : ''}${l.pointsAwarded}P` : ''}</span>
         </div>
       `;
     }).join('');
   }
+}
+
+function computePeriodProgress(chore) {
+  const periodDays = Number(chore.periodDays) || 0;
+  const targetCount = Number(chore.targetCount) || 0;
+  if (periodDays <= 0 || targetCount <= 0) return null;
+  const periodMs = periodDays * 24 * 60 * 60 * 1000;
+  const startMs = new Date(chore.createdAt).getTime();
+  const nowMs = Date.now();
+  const currentPeriodIndex = Math.floor((nowMs - startMs) / periodMs);
+  const periodStart = startMs + currentPeriodIndex * periodMs;
+  const periodEnd = periodStart + periodMs;
+  const completedCount = allChoreLogs.filter((l) =>
+    l.choreId === chore.id && l.status === 'approved' &&
+    new Date(l.gradedAt).getTime() >= periodStart && new Date(l.gradedAt).getTime() < periodEnd
+  ).length;
+  const daysLeft = Math.max(0, Math.ceil((periodEnd - nowMs) / (24 * 60 * 60 * 1000)));
+  return { completedCount, targetCount, daysLeft };
 }
 
 function renderChoreRow(chore, log) {
@@ -255,10 +279,17 @@ function renderChoreRow(chore, log) {
   const pointsLabel = (chore.levels && chore.levels.length > 0)
     ? chore.levels.map((l) => `${escapeHtml(l.label)}${l.points}P`).join(' / ')
     : `${chore.points}P`;
+  const progress = computePeriodProgress(chore);
+  const progressLabel = progress
+    ? `<div class="muted">今のきかん: ${progress.completedCount}/${progress.targetCount}回（あと${progress.daysLeft}日）</div>`
+    : '';
   return `
-    <div class="list-item row-between">
-      <span>${escapeHtml(chore.name)} <span class="muted">${pointsLabel}</span></span>
-      ${statusHtml}
+    <div class="list-item">
+      <div class="row-between">
+        <span>${escapeHtml(chore.name)} <span class="muted">${pointsLabel}</span></span>
+        ${statusHtml}
+      </div>
+      ${progressLabel}
     </div>
   `;
 }
