@@ -73,6 +73,7 @@
         <div id="text-fields" class="hidden">
           <label>正解例（採点の参考用・任意）</label>
           <input type="text" id="q-correct-text" placeholder="採点の目安になる正解（任意）" />
+          <label><input type="checkbox" id="q-auto-grade-exact" style="width:auto;" /> 解答が上の正解例と完全一致したら自動で正解にする</label>
         </div>
 
         <label>正解ポイント</label>
@@ -111,6 +112,7 @@
         <h3>CSVで一括登録</h3>
         <p class="muted">1行目は見出し（教科,単元,難易度,問題,解答,解説）にしてください。「問題」列以外は空欄でも構いません。Excel等の表からコピー＆ペーストできます。</p>
         <textarea id="bulk-csv-text" rows="8" placeholder="教科,単元,難易度,問題,解答,解説&#10;算数,方程式,かんたん,x＋9＝18,9,両辺から9をひく"></textarea>
+        <label><input type="checkbox" id="bulk-csv-auto-grade-exact" style="width:auto;" /> 解答が「解答」列と完全一致したら自動で正解にする</label>
         <label>正解ポイント（共通）</label>
         <input type="number" id="bulk-csv-points" value="10" min="0" />
         <label>期限（任意・共通）</label>

@@ -160,6 +160,7 @@ async function addQuestion() {
     payload.correctIndex = checked ? Number(checked.value) : undefined;
   } else {
     payload.correctAnswer = document.getElementById('q-correct-text').value;
+    payload.autoGradeExact = document.getElementById('q-auto-grade-exact').checked;
   }
 
   try {
@@ -170,6 +171,7 @@ async function addQuestion() {
     addChoiceField();
     addChoiceField();
     document.getElementById('q-correct-text').value = '';
+    document.getElementById('q-auto-grade-exact').checked = false;
     document.getElementById('q-due-at').value = '';
     document.getElementById('q-late-penalty').value = '0';
     showToast('問題を登録しました');
@@ -202,14 +204,16 @@ async function addBulkCsvQuestions() {
   const dueAt = document.getElementById('bulk-csv-due-at').value;
   const latePenalty = document.getElementById('bulk-csv-late-penalty').value;
   const assignedChildId = document.getElementById('bulk-csv-assigned-child').value;
+  const autoGradeExact = document.getElementById('bulk-csv-auto-grade-exact').checked;
   if (!csvText.trim()) { showToast('CSVを入力してください'); return; }
   try {
     const created = await apiPost('/api/questions/bulk-csv', {
-      csvText, points, dueAt: dueAt || null, latePenalty, assignedChildId: assignedChildId || null
+      csvText, points, dueAt: dueAt || null, latePenalty, assignedChildId: assignedChildId || null, autoGradeExact
     });
     document.getElementById('bulk-csv-text').value = '';
     document.getElementById('bulk-csv-due-at').value = '';
     document.getElementById('bulk-csv-late-penalty').value = '0';
+    document.getElementById('bulk-csv-auto-grade-exact').checked = false;
     showToast(`${created.length}問を登録しました`);
     loadQuestions();
   } catch (e) { showToast(e.message); }
@@ -274,7 +278,7 @@ function renderQuestionsList() {
       </div>
       ${tags ? `<div class="muted">${tags}</div>` : ''}
       ${q.type === 'choice' ? `<div class="muted">選択肢: ${q.choices.map((c, i) => (i === q.correctIndex ? `✅${escapeHtml(c)}` : escapeHtml(c))).join(' / ')}</div>` : ''}
-      ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}</div>` : ''}
+      ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}${q.autoGradeExact ? '（完全一致で自動採点）' : ''}</div>` : ''}
       ${dueLabel ? `<div class="muted">${dueLabel}</div>` : ''}
     </div>
   `;
@@ -334,6 +338,7 @@ async function editQuestion(id) {
       ` : `
         <label>正解例（採点の参考用・任意）</label>
         <input type="text" id="edit-q-correct-text-${id}" value="${escapeHtml(q.correctAnswer || '')}" />
+        <label><input type="checkbox" id="edit-q-auto-grade-exact-${id}" style="width:auto;" ${q.autoGradeExact ? 'checked' : ''} /> 解答が上の正解例と完全一致したら自動で正解にする</label>
       `}
       <label>教科（任意）</label>
       <input type="text" id="edit-q-subject-${id}" value="${escapeHtml(q.subject || '')}" />
@@ -395,6 +400,7 @@ async function saveQuestionEdit(id, btn) {
     payload.correctIndex = checked ? Number(checked.value) : undefined;
   } else {
     payload.correctAnswer = overlay.querySelector(`#edit-q-correct-text-${id}`).value;
+    payload.autoGradeExact = overlay.querySelector(`#edit-q-auto-grade-exact-${id}`).checked;
   }
   try {
     await apiPatch(`/api/questions/${id}`, payload);

@@ -223,7 +223,7 @@ app.get('/api/questions', ah(async (req, res) => {
 app.post('/api/questions', ah(async (req, res) => {
   const {
     type, question, choices, correctIndex, correctAnswer, points, dueAt, latePenalty, assignedChildId,
-    subject, unit, difficulty, explanation
+    subject, unit, difficulty, explanation, autoGradeExact
   } = req.body;
   if (!question || !question.trim()) return res.status(400).json({ error: '問題文を入力してください' });
   if (type !== 'choice' && type !== 'text') return res.status(400).json({ error: '出題形式が不正です' });
@@ -251,6 +251,7 @@ app.post('/api/questions', ah(async (req, res) => {
       unit: (unit || '').trim(),
       difficulty: (difficulty || '').trim(),
       explanation: (explanation || '').trim(),
+      autoGradeExact: type === 'text' && Boolean(autoGradeExact),
       active: true,
       createdAt: now()
     };
@@ -298,7 +299,7 @@ app.post('/api/questions/bulk', ah(async (req, res) => {
 // Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説
 // (header row required; columns matched by name, so order/missing columns are tolerated).
 app.post('/api/questions/bulk-csv', ah(async (req, res) => {
-  const { csvText, points, dueAt, latePenalty, assignedChildId } = req.body;
+  const { csvText, points, dueAt, latePenalty, assignedChildId, autoGradeExact } = req.body;
   if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
 
   const rows = parseCsv(csvText).filter((row) => row.some((cell) => cell.trim().length > 0));
@@ -344,6 +345,7 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
         unit: parsed.unit,
         difficulty: parsed.difficulty,
         explanation: parsed.explanation,
+        autoGradeExact: Boolean(autoGradeExact),
         active: true,
         createdAt: now()
       };
@@ -374,6 +376,7 @@ app.patch('/api/questions/:id', ah(async (req, res) => {
     if (updates.unit !== undefined) item.unit = String(updates.unit).trim();
     if (updates.difficulty !== undefined) item.difficulty = String(updates.difficulty).trim();
     if (updates.explanation !== undefined) item.explanation = String(updates.explanation).trim();
+    if (updates.autoGradeExact !== undefined) item.autoGradeExact = Boolean(updates.autoGradeExact);
     if (updates.active !== undefined) item.active = Boolean(updates.active);
     return item;
   });
@@ -434,8 +437,15 @@ app.post('/api/answers', ah(async (req, res) => {
       } else {
         scheduleRetry(db, question, child.id);
       }
+    } else if (question.autoGradeExact && question.correctAnswer && answer.answerText === question.correctAnswer.trim()) {
+      // Only ever auto-marks correct on an exact match; anything else (including
+      // a near-miss) still falls through to manual grading below.
+      answer.status = 'correct';
+      answer.gradedAt = now();
+      answer.pointsAwarded = question.points;
+      child.points += question.points;
     }
-    // text type stays 'pending' until parent grades it
+    // otherwise stays 'pending' until parent grades it
 
     db.answers.push(answer);
     return { answer, child };
