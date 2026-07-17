@@ -542,24 +542,28 @@ app.get('/api/redemptions', ah(async (req, res) => {
 }));
 
 app.post('/api/redemptions', ah(async (req, res) => {
-  const { childId, rewardId } = req.body;
+  const { childId, rewardId, quantity } = req.body;
+  const qty = Math.max(1, Math.floor(Number(quantity) || 1));
   const result = await withDb((db) => {
     const child = db.children.find((c) => c.id === Number(childId));
     const reward = db.rewards.find((r) => r.id === Number(rewardId));
     if (!child || !reward) return { error: '子どもまたはご褒美が見つかりません' };
     if (!reward.active) return { error: 'このご褒美は現在利用できません' };
-    if (reward.stock !== null && reward.stock <= 0) return { error: '在庫がありません' };
-    if (child.points < reward.cost) return { error: 'ポイントが足りません' };
+    if (reward.stock !== null && reward.stock < qty) return { error: '在庫が足りません' };
+    const totalCost = reward.cost * qty;
+    if (child.points < totalCost) return { error: 'ポイントが足りません' };
 
-    child.points -= reward.cost;
-    if (reward.stock !== null) reward.stock -= 1;
+    child.points -= totalCost;
+    if (reward.stock !== null) reward.stock -= qty;
 
     const redemption = {
       id: nextId(db.redemptions),
       childId: child.id,
       rewardId: reward.id,
       rewardName: reward.name,
-      cost: reward.cost,
+      quantity: qty,
+      unitCost: reward.cost,
+      cost: totalCost,
       redeemedAt: now()
     };
     db.redemptions.push(redemption);

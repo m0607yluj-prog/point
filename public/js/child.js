@@ -345,8 +345,14 @@ function renderRewards() {
         <div class="reward-card">
           <div class="emoji">${escapeHtml(r.emoji)}</div>
           <div>${escapeHtml(r.name)}</div>
-          <div class="cost">${r.cost} P</div>
+          <div class="cost">${r.cost} P / 1個</div>
           ${r.stock !== null ? `<div class="muted">残り${r.stock}個</div>` : ''}
+          <div class="row-between" style="justify-content:center; gap:6px; margin:6px 0;">
+            <span class="muted">個数</span>
+            <input type="number" id="reward-qty-${r.id}" value="1" min="1" ${r.stock !== null ? `max="${r.stock}"` : ''}
+              oninput="updateRewardCost(${r.id})" style="width:60px; text-align:center; margin:0;" />
+          </div>
+          <div class="muted">合計: <span id="reward-total-${r.id}">${r.cost}</span>P</div>
           <button class="btn orange small" ${canAfford ? '' : 'disabled'} onclick="redeem(${r.id})">
             ${outOfStock ? '在庫なし' : '交換'}
           </button>
@@ -364,19 +370,32 @@ function renderRewards() {
     const sorted = [...history].sort((a, b) => new Date(b.redeemedAt) - new Date(a.redeemedAt));
     el.innerHTML = sorted.map((h) => `
       <div class="list-item row-between">
-        <span>${escapeHtml(h.rewardName)}</span>
+        <span>${escapeHtml(h.rewardName)}${h.quantity > 1 ? ` ×${h.quantity}` : ''}</span>
         <span class="muted">-${h.cost}P</span>
       </div>
     `).join('');
   });
 }
 
+function updateRewardCost(rewardId) {
+  const reward = allRewards.find((r) => r.id === rewardId);
+  const input = document.getElementById(`reward-qty-${rewardId}`);
+  let qty = Math.max(1, parseInt(input.value, 10) || 1);
+  if (reward.stock !== null) qty = Math.min(qty, Math.max(1, reward.stock));
+  input.value = qty;
+  document.getElementById(`reward-total-${rewardId}`).textContent = reward.cost * qty;
+}
+
 async function redeem(rewardId) {
   const reward = allRewards.find((r) => r.id === rewardId);
-  const ok = await askConfirm(`「${reward.name}」に${reward.cost}Pを使う？`);
+  const qtyInput = document.getElementById(`reward-qty-${rewardId}`);
+  const quantity = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+  const totalCost = reward.cost * quantity;
+  const label = quantity > 1 ? `「${reward.name}」を${quantity}個` : `「${reward.name}」`;
+  const ok = await askConfirm(`${label}に${totalCost}Pを使う？`);
   if (!ok) return;
   try {
-    await apiPost('/api/redemptions', { childId: currentChild.id, rewardId });
+    await apiPost('/api/redemptions', { childId: currentChild.id, rewardId, quantity });
     showToast('交換したよ！🎁');
     await refreshAll();
   } catch (e) {

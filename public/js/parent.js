@@ -873,7 +873,8 @@ async function loadRewards() {
   logEl.innerHTML = sorted.map((r) => {
     const child = children.find((c) => c.id === r.childId) || { name: '(不明)' };
     const date = new Date(r.redeemedAt).toLocaleString('ja-JP');
-    return `<div class="list-item row-between"><span>${escapeHtml(child.name)}: ${escapeHtml(r.rewardName)}</span><span class="muted">-${r.cost}P (${date})</span></div>`;
+    const qtyLabel = r.quantity > 1 ? ` ×${r.quantity}` : '';
+    return `<div class="list-item row-between"><span>${escapeHtml(child.name)}: ${escapeHtml(r.rewardName)}${qtyLabel}</span><span class="muted">-${r.cost}P (${date})</span></div>`;
   }).join('');
 }
 
