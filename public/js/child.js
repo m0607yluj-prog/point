@@ -209,7 +209,7 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
   } else {
     routineEl.innerHTML = routine.map((c) => {
       const log = allChoreLogs.find((l) => l.choreId === c.id && l.dateKey === todayKeyClient && l.status !== 'rejected');
-      return renderChoreRow(c, log);
+      return renderChoreRow(c, log, category);
     }).join('');
   }
 
@@ -220,7 +220,7 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
   } else {
     adhocEl.innerHTML = adhoc.map((c) => {
       const log = allChoreLogs.find((l) => l.choreId === c.id && l.status !== 'rejected');
-      return renderChoreRow(c, log);
+      return renderChoreRow(c, log, category);
     }).join('');
   }
 
@@ -232,8 +232,9 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
   } else {
     const sorted = [...relevantLogs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
     historyEl.innerHTML = sorted.map((l) => {
+      const countLabel = l.count > 1 ? `${l.count}回分 ` : '';
       const statusLabel = l.status === 'pending' ? '承認待ち'
-        : l.status === 'approved' ? (l.levelLabel || '完了')
+        : l.status === 'approved' ? `${countLabel}${l.levelLabel || '完了'}`
         : l.status === 'period_penalty' ? `目標未達成 (${l.completedCount}/${l.targetCount}回)`
         : 'やり直し';
       const badgeClass = l.status === 'pending' ? 'pending'
@@ -260,20 +261,31 @@ function computePeriodProgress(chore) {
   const currentPeriodIndex = Math.floor((nowMs - startMs) / periodMs);
   const periodStart = startMs + currentPeriodIndex * periodMs;
   const periodEnd = periodStart + periodMs;
-  const completedCount = allChoreLogs.filter((l) =>
-    l.choreId === chore.id && l.status === 'approved' &&
-    new Date(l.gradedAt).getTime() >= periodStart && new Date(l.gradedAt).getTime() < periodEnd
-  ).length;
+  const completedCount = allChoreLogs
+    .filter((l) =>
+      l.choreId === chore.id && l.status === 'approved' &&
+      new Date(l.gradedAt).getTime() >= periodStart && new Date(l.gradedAt).getTime() < periodEnd
+    )
+    .reduce((sum, l) => sum + Math.max(1, Number(l.count) || 1), 0);
   const daysLeft = Math.max(0, Math.ceil((periodEnd - nowMs) / (24 * 60 * 60 * 1000)));
   return { completedCount, targetCount, daysLeft };
 }
 
-function renderChoreRow(chore, log) {
+function renderChoreRow(chore, log, category) {
   let statusHtml;
   if (log && log.status === 'pending') {
-    statusHtml = '<span class="badge pending">承認待ち</span>';
+    const countLabel = log.count > 1 ? `${log.count}回分 ` : '';
+    statusHtml = `<span class="badge pending">${countLabel}承認待ち</span>`;
   } else if (log && log.status === 'approved') {
-    statusHtml = `<span class="badge correct">${escapeHtml(log.levelLabel || '完了！')}</span>`;
+    const countLabel = log.count > 1 ? `${log.count}回分 ` : '';
+    statusHtml = `<span class="badge correct">${countLabel}${escapeHtml(log.levelLabel || '完了！')}</span>`;
+  } else if (category === 'study') {
+    statusHtml = `
+      <span class="btn-row" style="gap:4px;">
+        <input type="number" id="study-count-${chore.id}" value="1" min="1" max="99" style="width:56px;" />
+        <button class="btn green small" onclick="reportChore(${chore.id}, document.getElementById('study-count-${chore.id}').value)">やった！</button>
+      </span>
+    `;
   } else {
     statusHtml = `<button class="btn green small" onclick="reportChore(${chore.id})">やった！</button>`;
   }
@@ -295,10 +307,11 @@ function renderChoreRow(chore, log) {
   `;
 }
 
-async function reportChore(choreId) {
+async function reportChore(choreId, count) {
+  const reportCount = Math.max(1, Math.min(99, Number(count) || 1));
   try {
-    await apiPost('/api/chore-logs', { childId: currentChild.id, choreId });
-    showToast('報告したよ！保護者の確認を待っててね');
+    await apiPost('/api/chore-logs', { childId: currentChild.id, choreId, count: reportCount });
+    showToast(reportCount > 1 ? `${reportCount}回分報告したよ！保護者の確認を待っててね` : '報告したよ！保護者の確認を待っててね');
     await refreshAll();
   } catch (e) {
     showToast(e.message);

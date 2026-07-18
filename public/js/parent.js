@@ -37,6 +37,7 @@ function showTab(tab) {
   document.querySelectorAll('.tab-content').forEach((c) => c.classList.add('hidden'));
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
   if (tab === 'grading') loadGrading();
+  if (tab === 'results') loadResults();
   if (tab === 'chores') loadChores();
   if (tab === 'study') loadStudyTasks();
   if (tab === 'bonus') loadBonusTasks();
@@ -423,12 +424,15 @@ async function loadGrading() {
     el.innerHTML = '<p class="muted">採点待ちの回答はありません。</p>';
     return;
   }
+  document.getElementById('grading-select-all').checked = false;
   el.innerHTML = pending.map((a) => {
     const child = children.find((c) => c.id === a.childId) || { name: '(不明)' };
     const q = questions.find((x) => x.id === a.questionId) || { question: '(削除された問題)', correctAnswer: '', explanation: '' };
     return `
       <div class="list-item">
-        <div>${escapeHtml(child.name)} さんの回答</div>
+        <div class="row-between">
+          <label><input type="checkbox" class="grading-check" value="${a.id}" style="width:auto;" /> ${escapeHtml(child.name)} さんの回答</label>
+        </div>
         <div><strong>問題:</strong> ${escapeHtml(q.question)}</div>
         ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}</div>` : ''}
         ${q.explanation ? `<div class="muted">解説: ${escapeHtml(q.explanation)}</div>` : ''}
@@ -442,10 +446,113 @@ async function loadGrading() {
   }).join('');
 }
 
+function toggleAllGradingChecks(checked) {
+  document.querySelectorAll('.grading-check').forEach((el) => { el.checked = checked; });
+}
+
+async function gradeSelectedAnswers(correct) {
+  const ids = [...document.querySelectorAll('.grading-check:checked')].map((el) => Number(el.value));
+  if (ids.length === 0) { showToast('回答を選んでください'); return; }
+  const ok = await askConfirm(`選んだ${ids.length}件を「${correct ? '正解' : 'やり直し'}」にしますか？`);
+  if (!ok) return;
+  try {
+    await Promise.all(ids.map((id) => apiPatch(`/api/answers/${id}/grade`, { correct })));
+    showToast(`${ids.length}件を採点しました`);
+    loadGrading();
+  } catch (e) { showToast(e.message); }
+}
+
 async function gradeAnswer(id, correct) {
   await apiPatch(`/api/answers/${id}/grade`, { correct });
   showToast('採点しました');
   loadGrading();
+}
+
+// ---------- Results (回答結果一覧) ----------
+
+let cachedResultsAnswers = [];
+let cachedResultsChildren = [];
+let cachedResultsQuestions = [];
+
+async function loadResults() {
+  const [answers, children, questions] = await Promise.all([
+    apiGet('/api/answers'),
+    apiGet('/api/children'),
+    apiGet('/api/questions')
+  ]);
+  cachedResultsAnswers = answers;
+  cachedResultsChildren = children;
+  cachedResultsQuestions = questions;
+
+  const sel = document.getElementById('results-filter-child');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">こども: すべて</option>' +
+    children.map((c) => `<option value="${c.id}">${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
+  sel.value = current;
+
+  renderResultsList();
+}
+
+function renderResultsList() {
+  const childFilter = document.getElementById('results-filter-child').value;
+  const statusFilter = document.getElementById('results-filter-status').value;
+  const el = document.getElementById('results-list');
+
+  let answers = cachedResultsAnswers;
+  if (childFilter) answers = answers.filter((a) => a.childId === Number(childFilter));
+  if (statusFilter) answers = answers.filter((a) => a.status === statusFilter);
+
+  if (answers.length === 0) {
+    el.innerHTML = '<p class="muted">条件に一致する回答がありません。</p>';
+    return;
+  }
+
+  const sorted = [...answers].sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  el.innerHTML = sorted.map((a) => {
+    const child = cachedResultsChildren.find((c) => c.id === a.childId) || { name: '(不明)' };
+    const q = cachedResultsQuestions.find((x) => x.id === a.questionId) || { question: '(削除された問題)', choices: [] };
+    const statusLabel = a.status === 'pending' ? '採点待ち'
+      : a.status === 'correct' ? '正解'
+      : a.status === 'expired' ? '期限切れ'
+      : '不正解';
+    const badgeClass = a.status === 'pending' ? 'pending'
+      : a.status === 'correct' ? 'correct'
+      : a.status === 'expired' ? 'expired'
+      : 'incorrect';
+    const answerLabel = a.type === 'choice'
+      ? (q.choices && q.choices[a.answerIndex] !== undefined ? q.choices[a.answerIndex] : `選択肢${a.answerIndex}`)
+      : a.answerText;
+    const autoNote = a.type === 'text' && q.autoGradeExact ? '（この問題は完全一致で自動採点が有効です）' : '';
+    const date = new Date(a.submittedAt).toLocaleString('ja-JP');
+    const correctionButtons = (a.status === 'correct' || a.status === 'incorrect')
+      ? `<div class="btn-row">
+          ${a.status === 'incorrect' ? `<button class="btn green small" onclick="correctGrading(${a.id}, true)">正解に直す</button>` : ''}
+          ${a.status === 'correct' ? `<button class="btn pink small" onclick="correctGrading(${a.id}, false)">不正解に直す</button>` : ''}
+        </div>`
+      : '';
+    return `
+      <div class="list-item">
+        <div class="row-between">
+          <span>${escapeHtml(child.name)}: ${escapeHtml(q.question)}</span>
+          <span class="badge ${badgeClass}">${statusLabel}${a.pointsAwarded ? ` ${a.pointsAwarded > 0 ? '+' : ''}${a.pointsAwarded}P` : ''}</span>
+        </div>
+        <div class="muted">回答: ${escapeHtml(answerLabel == null ? '' : String(answerLabel))}${autoNote}</div>
+        ${q.correctAnswer ? `<div class="muted">参考正解: ${escapeHtml(q.correctAnswer)}</div>` : ''}
+        <div class="muted">${date}</div>
+        ${correctionButtons}
+      </div>
+    `;
+  }).join('');
+}
+
+async function correctGrading(id, correct) {
+  const ok = await askConfirm(correct ? 'この回答を「正解」に直しますか？' : 'この回答を「不正解」に直しますか？');
+  if (!ok) return;
+  try {
+    await apiPatch(`/api/answers/${id}/grade`, { correct });
+    showToast('採点を修正しました');
+    loadResults();
+  } catch (e) { showToast(e.message); }
 }
 
 // ---------- Chores (お手伝い・勉強タスク) ----------
@@ -660,13 +767,15 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
   approvalEl.innerHTML = relevantLogs.map((l) => {
     const child = children.find((c) => c.id === l.childId) || { name: '(不明)' };
     const chore = allChores.find((c) => c.id === l.choreId);
+    const count = Math.max(1, Number(l.count) || 1);
     const levels = (chore && chore.levels) || [];
     const approveButtons = levels.length > 0
-      ? levels.map((lv, i) => `<button class="btn green small" onclick="gradeChore(${l.id}, true, ${i})">${escapeHtml(lv.label)} (+${lv.points}P)</button>`).join('')
-      : `<button class="btn green small" onclick="gradeChore(${l.id}, true)">承認してポイント付与</button>`;
+      ? levels.map((lv, i) => `<button class="btn green small" onclick="gradeChore(${l.id}, true, ${i})">${escapeHtml(lv.label)} (+${lv.points * count}P)</button>`).join('')
+      : `<button class="btn green small" onclick="gradeChore(${l.id}, true)">承認してポイント付与${chore ? ` (+${chore.points * count}P)` : ''}</button>`;
+    const countLabel = count > 1 ? `${count}回分、` : '';
     return `
       <div class="list-item">
-        <div>${escapeHtml(child.name)} さんが「${escapeHtml(l.choreName)}」を報告しました</div>
+        <div>${escapeHtml(child.name)} さんが「${escapeHtml(l.choreName)}」を${countLabel}報告しました</div>
         <div class="btn-row">
           ${approveButtons}
           <button class="btn pink small" onclick="gradeChore(${l.id}, false)">やり直し</button>

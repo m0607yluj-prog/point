@@ -28,6 +28,7 @@
     <button class="tab-btn active" data-tab="children" onclick="showTab('children')">👧 こども</button>
     <button class="tab-btn" data-tab="questions" onclick="showTab('questions')">📝 問題作成</button>
     <button class="tab-btn" data-tab="grading" onclick="showTab('grading')">✅ 採点</button>
+    <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 結果</button>
     <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
     <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強タスク</button>
     <button class="tab-btn" data-tab="bonus" onclick="showTab('bonus')">🏆 ボーナス</button>
@@ -110,12 +111,13 @@
 
       <div class="card">
         <h3>CSVで一括登録</h3>
-        <p class="muted">1行目は見出し（教科,単元,難易度,問題,解答,解説,ポイント）にしてください。「問題」列以外は空欄でも構いません。「ポイント」列を入れると問題ごとに点数を変えられます（列がない・空欄の行は下の共通ポイントを使います）。Excel等の表からコピー＆ペーストできます。</p>
-        <textarea id="bulk-csv-text" rows="8" placeholder="教科,単元,難易度,問題,解答,解説,ポイント&#10;算数,方程式,かんたん,x＋9＝18,9,両辺から9をひく,5&#10;算数,方程式,ふつう,3x＋2y＝12でx=2のときのyは？,3,,10"></textarea>
+        <p class="muted">1行目は見出し（教科,単元,難易度,問題,解答,解説,ポイント,期限）にしてください。「問題」列以外は空欄でも構いません。Excel等の表からコピー＆ペーストできます。</p>
+        <p class="muted">ポイントは①「ポイント」列 →②なければ「難易度」列が数字（例:10）ならその数字 →③どちらもなければ下の共通ポイント、の順で決まります。期限は「期限」列（例: 2026-07-25 18:00）→なければ下の共通期限の順です。</p>
+        <textarea id="bulk-csv-text" rows="8" placeholder="教科,単元,難易度,問題,解答,解説,ポイント,期限&#10;算数,方程式,かんたん,x＋9＝18,9,両辺から9をひく,5,&#10;算数,方程式,10,3x＋2y＝12でx=2のときのyは？,3,,,2026-07-25 18:00"></textarea>
         <label><input type="checkbox" id="bulk-csv-auto-grade-exact" style="width:auto;" /> 解答が「解答」列と完全一致したら自動で正解にする</label>
-        <label>正解ポイント（共通・「ポイント」列が空欄の行に使われます）</label>
+        <label>正解ポイント（共通・上のフォールバックの最後に使われます）</label>
         <input type="number" id="bulk-csv-points" value="10" min="0" />
-        <label>期限（任意・共通）</label>
+        <label>期限（任意・共通・「期限」列が空欄の行に使われます）</label>
         <input type="datetime-local" id="bulk-csv-due-at" />
         <label>期限切れの減点（未回答1問につき・任意・共通）</label>
         <input type="number" id="bulk-csv-late-penalty" value="0" min="0" />
@@ -146,7 +148,30 @@
     <div id="tab-grading" class="tab-content hidden">
       <div class="card">
         <h3>採点待ちの回答（記述式）</h3>
+        <div class="btn-row">
+          <label><input type="checkbox" id="grading-select-all" onchange="toggleAllGradingChecks(this.checked)" style="width:auto;" /> すべて選択</label>
+          <button class="btn green small" onclick="gradeSelectedAnswers(true)">選んだ回答をまとめて正解にする</button>
+          <button class="btn pink small" onclick="gradeSelectedAnswers(false)">選んだ回答をまとめてやり直しにする</button>
+        </div>
         <div id="grading-list"></div>
+      </div>
+    </div>
+
+    <div id="tab-results" class="tab-content hidden">
+      <div class="card">
+        <h3>回答結果一覧</h3>
+        <p class="muted">全員分の問題の回答結果を確認できます。自動採点の動作確認にも使えます。</p>
+        <div class="btn-row">
+          <select id="results-filter-child" onchange="renderResultsList()"><option value="">こども: すべて</option></select>
+          <select id="results-filter-status" onchange="renderResultsList()">
+            <option value="">状態: すべて</option>
+            <option value="correct">正解</option>
+            <option value="incorrect">不正解</option>
+            <option value="pending">採点待ち</option>
+            <option value="expired">期限切れ</option>
+          </select>
+        </div>
+        <div id="results-list"></div>
       </div>
     </div>
 

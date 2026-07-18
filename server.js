@@ -23,6 +23,15 @@ function todayKey() {
   return now().slice(0, 10);
 }
 
+// Treats full-width digits/letters/punctuation (e.g. "９", common on
+// Japanese IMEs) as identical to their half-width form for exact-match
+// grading, since that's a keyboard-input quirk, not a different answer.
+function normalizeForExactMatch(str) {
+  return String(str || '')
+    .trim()
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+}
+
 function normalizeDueAt(value) {
   if (!value) return null;
   const d = new Date(value);
@@ -296,10 +305,10 @@ app.post('/api/questions/bulk', ah(async (req, res) => {
   res.json(created);
 }));
 
-// Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説,ポイント
+// Bulk-create text-type questions from a pasted CSV: 教科,単元,難易度,問題,解答,解説,ポイント,期限
 // (header row required; columns matched by name, so order/missing columns are tolerated).
-// A row's own ポイント value wins; if blank or the column is absent, the shared
-// `points` field from the request body is used instead.
+// Per-row ポイント falls back to a numeric 難易度 value, then to the shared
+// "points" field; per-row 期限 falls back to the shared "dueAt" field.
 app.post('/api/questions/bulk-csv', ah(async (req, res) => {
   const { csvText, points, dueAt, latePenalty, assignedChildId, autoGradeExact } = req.body;
   if (!csvText || !csvText.trim()) return res.status(400).json({ error: 'CSVを入力してください' });
@@ -317,22 +326,35 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
   const answerIdx = colIndex('解答');
   const explanationIdx = colIndex('解説');
   const pointsIdx = colIndex('ポイント');
+  const dueIdx = colIndex('期限');
 
   const dataRows = rows.slice(1);
   const parsedItems = dataRows
-    .map((row) => ({
-      question: (row[qIdx] || '').trim(),
-      subject: subjectIdx === -1 ? '' : (row[subjectIdx] || '').trim(),
-      unit: unitIdx === -1 ? '' : (row[unitIdx] || '').trim(),
-      difficulty: difficultyIdx === -1 ? '' : (row[difficultyIdx] || '').trim(),
-      correctAnswer: answerIdx === -1 ? '' : (row[answerIdx] || '').trim(),
-      explanation: explanationIdx === -1 ? '' : (row[explanationIdx] || '').trim(),
-      // Falls back to the shared "points" field when the row has no value of
-      // its own, so CSVs without a ポイント column keep working as before.
-      points: pointsIdx !== -1 && (row[pointsIdx] || '').trim() !== ''
-        ? Math.max(0, Number((row[pointsIdx] || '').trim()) || 0)
-        : Math.max(0, Number(points) || 0)
-    }))
+    .map((row) => {
+      const difficultyRaw = difficultyIdx === -1 ? '' : (row[difficultyIdx] || '').trim();
+      const pointsRaw = pointsIdx === -1 ? '' : (row[pointsIdx] || '').trim();
+      const dueRaw = dueIdx === -1 ? '' : (row[dueIdx] || '').trim();
+
+      let rowPoints;
+      if (pointsRaw !== '') {
+        rowPoints = Math.max(0, Number(pointsRaw) || 0);
+      } else if (difficultyRaw !== '' && !Number.isNaN(Number(difficultyRaw))) {
+        rowPoints = Math.max(0, Number(difficultyRaw) || 0);
+      } else {
+        rowPoints = Math.max(0, Number(points) || 0);
+      }
+
+      return {
+        question: (row[qIdx] || '').trim(),
+        subject: subjectIdx === -1 ? '' : (row[subjectIdx] || '').trim(),
+        unit: unitIdx === -1 ? '' : (row[unitIdx] || '').trim(),
+        difficulty: difficultyRaw,
+        correctAnswer: answerIdx === -1 ? '' : (row[answerIdx] || '').trim(),
+        explanation: explanationIdx === -1 ? '' : (row[explanationIdx] || '').trim(),
+        points: rowPoints,
+        dueAt: dueRaw !== '' ? normalizeDueAt(dueRaw) : normalizeDueAt(dueAt)
+      };
+    })
     .filter((item) => item.question.length > 0);
   if (parsedItems.length === 0) return res.status(400).json({ error: '問題文が見つかりませんでした' });
 
@@ -346,7 +368,7 @@ app.post('/api/questions/bulk-csv', ah(async (req, res) => {
         correctIndex: null,
         correctAnswer: parsed.correctAnswer,
         points: parsed.points,
-        dueAt: normalizeDueAt(dueAt),
+        dueAt: parsed.dueAt,
         latePenalty: Math.max(0, Number(latePenalty) || 0),
         assignedChildId: assignedChildId ? Number(assignedChildId) : null,
         subject: parsed.subject,
@@ -445,7 +467,8 @@ app.post('/api/answers', ah(async (req, res) => {
       } else {
         scheduleRetry(db, question, child.id);
       }
-    } else if (question.autoGradeExact && question.correctAnswer && answer.answerText === question.correctAnswer.trim()) {
+    } else if (question.autoGradeExact && question.correctAnswer &&
+      normalizeForExactMatch(answer.answerText) === normalizeForExactMatch(question.correctAnswer)) {
       // Only ever auto-marks correct on an exact match; anything else (including
       // a near-miss) still falls through to manual grading below.
       answer.status = 'correct';
@@ -463,22 +486,44 @@ app.post('/api/answers', ah(async (req, res) => {
 }));
 
 // Parent grades a pending (text) answer
+// Grades a pending answer, or re-grades one that was already graded (to fix
+// a mistake) — either way, any previously-awarded points are undone first so
+// correcting a grade never double-counts.
 app.patch('/api/answers/:id/grade', ah(async (req, res) => {
   const id = Number(req.params.id);
   const { correct } = req.body;
   const result = await withDb((db) => {
     const answer = db.answers.find((a) => a.id === id);
     if (!answer) return null;
-    if (answer.status !== 'pending') return { error: 'この回答はすでに採点済みです' };
+    if (answer.status !== 'pending' && answer.status !== 'correct' && answer.status !== 'incorrect') {
+      return { error: 'この回答は採点し直せません' };
+    }
     const question = db.questions.find((q) => q.id === answer.questionId);
     const child = db.children.find((c) => c.id === answer.childId);
+    const previousStatus = answer.status;
+
+    if (previousStatus !== 'pending' && child) {
+      child.points -= answer.pointsAwarded;
+    }
+
     answer.status = correct ? 'correct' : 'incorrect';
     answer.gradedAt = now();
+    answer.pointsAwarded = 0;
+
     if (question && child) {
       if (correct) {
         answer.pointsAwarded = question.points;
         child.points += question.points;
-      } else {
+        // Correcting incorrect -> correct: drop the retry that was scheduled
+        // for the mistake, as long as the child hasn't already done it.
+        if (previousStatus === 'incorrect') {
+          const retryIdx = db.questions.findIndex((q) =>
+            q.retryOf === question.id && q.assignedChildId === child.id &&
+            !db.answers.some((a) => a.questionId === q.id && a.childId === child.id)
+          );
+          if (retryIdx !== -1) db.questions.splice(retryIdx, 1);
+        }
+      } else if (previousStatus !== 'incorrect') {
         scheduleRetry(db, question, child.id);
       }
     }
@@ -731,7 +776,8 @@ app.get('/api/chore-logs', ah(async (req, res) => {
 
 // Child reports a chore as done (goes to pending until a parent approves it)
 app.post('/api/chore-logs', ah(async (req, res) => {
-  const { childId, choreId } = req.body;
+  const { childId, choreId, count } = req.body;
+  const reportCount = Math.max(1, Math.min(99, Math.round(Number(count) || 1)));
   const result = await withDb((db) => {
     const child = db.children.find((c) => c.id === Number(childId));
     const chore = db.chores.find((c) => c.id === Number(choreId));
@@ -759,6 +805,7 @@ app.post('/api/chore-logs', ah(async (req, res) => {
       childId: child.id,
       dateKey: todayKey(),
       status: 'pending',
+      count: reportCount,
       pointsAwarded: 0,
       reportedAt: now(),
       gradedAt: null
@@ -783,16 +830,17 @@ app.patch('/api/chore-logs/:id/grade', ah(async (req, res) => {
     log.status = approved ? 'approved' : 'rejected';
     log.gradedAt = now();
     if (approved && chore && child) {
+      const count = Math.max(1, Number(log.count) || 1);
       const levels = chore.levels || [];
       if (levels.length > 0) {
         const level = levels[Number(levelIndex)];
         if (!level) return { error: '達成度レベルを指定してください' };
-        log.pointsAwarded = level.points;
+        log.pointsAwarded = level.points * count;
         log.levelLabel = level.label;
-        child.points += level.points;
+        child.points += log.pointsAwarded;
       } else {
-        log.pointsAwarded = chore.points;
-        child.points += chore.points;
+        log.pointsAwarded = chore.points * count;
+        child.points += log.pointsAwarded;
       }
       if (chore.type === 'adhoc') chore.active = false;
     }
