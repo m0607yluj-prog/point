@@ -424,7 +424,8 @@ async function loadGrading() {
     el.innerHTML = '<p class="muted">採点待ちの回答はありません。</p>';
     return;
   }
-  document.getElementById('grading-select-all').checked = false;
+  const selectAllEl = document.getElementById('grading-select-all');
+  if (selectAllEl) selectAllEl.checked = false;
   el.innerHTML = pending.map((a) => {
     const child = children.find((c) => c.id === a.childId) || { name: '(不明)' };
     const q = questions.find((x) => x.id === a.questionId) || { question: '(削除された問題)', correctAnswer: '', explanation: '' };
