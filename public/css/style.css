@@ -122,6 +122,24 @@ label { font-weight: bold; font-size: 0.9rem; display: block; margin-top: 8px; }
   50% { box-shadow: 0 0 0 5px rgba(224, 49, 49, 0); }
 }
 
+.subtabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.subtab-btn {
+  background: var(--card);
+  border: 2px solid var(--purple);
+  color: var(--purple);
+  border-radius: 20px;
+  padding: 8px 14px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.subtab-btn.active { background: var(--purple); color: white; }
+
 .hidden { display: none !important; }
 
 .child-picker {

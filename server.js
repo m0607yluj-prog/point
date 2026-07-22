@@ -588,9 +588,10 @@ app.delete('/api/rewards/:id', ah(async (req, res) => {
 // ---------- Redemptions ----------
 
 app.get('/api/redemptions', ah(async (req, res) => {
-  const { childId } = req.query;
+  const { childId, status } = req.query;
   let redemptions = await withDb((db) => db.redemptions);
   if (childId) redemptions = redemptions.filter((r) => r.childId === Number(childId));
+  if (status) redemptions = redemptions.filter((r) => (r.status || 'pending') === status);
   res.json(redemptions);
 }));
 
@@ -617,7 +618,9 @@ app.post('/api/redemptions', ah(async (req, res) => {
       quantity: qty,
       unitCost: reward.cost,
       cost: totalCost,
-      redeemedAt: now()
+      status: 'pending',
+      redeemedAt: now(),
+      fulfilledAt: null
     };
     db.redemptions.push(redemption);
     return { redemption, child };
@@ -626,9 +629,23 @@ app.post('/api/redemptions', ah(async (req, res) => {
   res.json(result);
 }));
 
+// Parent marks a redemption as fulfilled (e.g. after actually adding the phone time)
+app.patch('/api/redemptions/:id/fulfill', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const redemption = await withDb((db) => {
+    const r = db.redemptions.find((x) => x.id === id);
+    if (!r) return null;
+    r.status = 'fulfilled';
+    r.fulfilledAt = now();
+    return r;
+  });
+  if (!redemption) return res.status(404).json({ error: '見つかりません' });
+  res.json(redemption);
+}));
+
 // ---------- Chores (お手伝い・勉強タスク・ボーナスタスク) ----------
 
-const CHORE_CATEGORIES = ['household', 'study', 'bonus'];
+const CHORE_CATEGORIES = ['household', 'study', 'bonus', 'goal'];
 function normalizeCategory(value) {
   return CHORE_CATEGORIES.includes(value) ? value : 'household';
 }

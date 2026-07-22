@@ -38,11 +38,15 @@ function showTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
   if (tab === 'grading') loadGrading();
   if (tab === 'results') loadResults();
-  if (tab === 'chores') loadChores();
-  if (tab === 'study') loadStudyTasks();
-  if (tab === 'bonus') loadBonusTasks();
+  if (tab === 'tasks') loadAllTasks();
   if (tab === 'points') loadPoints();
   if (tab === 'rewards') loadRewards();
+}
+
+function showTaskCategory(cat) {
+  document.querySelectorAll('.subtab-btn').forEach((b) => b.classList.toggle('active', b.dataset.taskcat === cat));
+  document.querySelectorAll('.task-category-content').forEach((c) => c.classList.add('hidden'));
+  document.getElementById(`taskcat-${cat}`).classList.remove('hidden');
 }
 
 function initMain() {
@@ -86,7 +90,8 @@ async function copyChildUrl(id, name) {
 const CHILD_TARGET_SELECT_IDS = [
   'new-adhoc-chore-child', 'q-assigned-child', 'bulk-assigned-child', 'bulk-csv-assigned-child',
   'new-study-task-child', 'bulk-study-csv-assigned-child', 'new-recurring-task-child',
-  'new-bonus-task-child', 'bulk-bonus-csv-assigned-child'
+  'new-bonus-task-child', 'bulk-bonus-csv-assigned-child',
+  'new-adhoc-goal-child', 'new-recurring-goal-child'
 ];
 
 function populateAdhocChildSelect(children) {
@@ -713,6 +718,67 @@ async function loadBonusTasks() {
   await renderChoreCategory('bonus', 'bonus-tasks-list', 'bonus-approval-list', 'まだボーナスタスクが登録されていません。');
 }
 
+async function loadGoalTasks() {
+  await renderChoreCategory('goal', 'goal-tasks-list', 'goal-approval-list', 'まだ目標タスクが登録されていません。');
+}
+
+function loadAllTasks() {
+  loadChores();
+  loadStudyTasks();
+  loadBonusTasks();
+  loadGoalTasks();
+}
+
+async function addRoutineGoalTask() {
+  const name = document.getElementById('new-routine-goal-name').value;
+  const points = document.getElementById('new-routine-goal-points').value;
+  const levels = collectLevels('routine-goal-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', { name, type: 'routine', points, levels, category: 'goal' });
+    document.getElementById('new-routine-goal-name').value = '';
+    clearLevelRows('routine-goal-levels');
+    showToast('追加しました');
+    loadGoalTasks();
+  } catch (e) { showToast(e.message); }
+}
+
+async function addAdhocGoalTask() {
+  const name = document.getElementById('new-adhoc-goal-name').value;
+  const points = document.getElementById('new-adhoc-goal-points').value;
+  const assignedChildId = document.getElementById('new-adhoc-goal-child').value;
+  const levels = collectLevels('adhoc-goal-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', { name, type: 'adhoc', points, levels, assignedChildId: assignedChildId || null, category: 'goal' });
+    document.getElementById('new-adhoc-goal-name').value = '';
+    clearLevelRows('adhoc-goal-levels');
+    showToast('依頼しました');
+    loadGoalTasks();
+  } catch (e) { showToast(e.message); }
+}
+
+async function addRecurringGoalTask() {
+  const name = document.getElementById('new-recurring-goal-name').value;
+  const points = document.getElementById('new-recurring-goal-points').value;
+  const periodDays = document.getElementById('new-recurring-goal-period').value;
+  const targetCount = document.getElementById('new-recurring-goal-target').value;
+  const periodPenalty = document.getElementById('new-recurring-goal-penalty').value;
+  const assignedChildId = document.getElementById('new-recurring-goal-child').value;
+  const levels = collectLevels('recurring-goal-levels');
+  if (!name.trim()) { showToast('内容を入力してください'); return; }
+  try {
+    await apiPost('/api/chores', {
+      name, type: 'routine', points, levels, periodDays, targetCount, periodPenalty,
+      assignedChildId: assignedChildId || null, category: 'goal'
+    });
+    document.getElementById('new-recurring-goal-name').value = '';
+    clearLevelRows('recurring-goal-levels');
+    showToast('追加しました');
+    loadGoalTasks();
+  } catch (e) { showToast(e.message); }
+}
+
 async function renderChoreCategory(category, listElId, approvalElId, emptyMessage) {
   const [allChores, children, pendingLogs] = await Promise.all([
     apiGet('/api/chores'),
@@ -788,24 +854,20 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
 
 async function toggleChoreActive(id, active) {
   await apiPatch(`/api/chores/${id}`, { active });
-  loadChores();
-  loadStudyTasks();
-  loadBonusTasks();
+  loadAllTasks();
 }
 
 async function deleteChore(id) {
   const ok = await askConfirm('削除しますか？');
   if (!ok) return;
   await apiDelete(`/api/chores/${id}`);
-  loadChores();
-  loadStudyTasks();
-  loadBonusTasks();
+  loadAllTasks();
 }
 
 async function editChore(id) {
   const chore = cachedChores.find((c) => c.id === id);
   if (!chore) return;
-  const categoryLabel = chore.category === 'study' ? '勉強タスク' : chore.category === 'bonus' ? 'ボーナスタスク' : 'お手伝い';
+  const categoryLabel = chore.category === 'study' ? '勉強タスク' : chore.category === 'bonus' ? 'ボーナスタスク' : chore.category === 'goal' ? '目標タスク' : 'お手伝い';
   const hasSubjectUnit = chore.category === 'study' || chore.category === 'bonus';
   const isRoutine = chore.type === 'routine';
   const levelsId = `edit-chore-levels-${id}`;
@@ -882,9 +944,7 @@ async function saveChoreEdit(id, btn) {
     await apiPatch(`/api/chores/${id}`, payload);
     overlay.remove();
     showToast('更新しました');
-    loadChores();
-    loadStudyTasks();
-    loadBonusTasks();
+    loadAllTasks();
   } catch (e) { showToast(e.message); }
 }
 
@@ -894,9 +954,7 @@ async function gradeChore(id, approved, levelIndex) {
   try {
     await apiPatch(`/api/chore-logs/${id}/grade`, payload);
     showToast(approved ? 'ポイントを付与しました' : 'やり直しにしました');
-    loadChores();
-    loadStudyTasks();
-    loadBonusTasks();
+    loadAllTasks();
   } catch (e) { showToast(e.message); }
 }
 
@@ -974,6 +1032,25 @@ async function loadRewards() {
     `).join('');
   }
 
+  const pendingEl = document.getElementById('redemption-pending-list');
+  const pending = redemptions.filter((r) => (r.status || 'pending') === 'pending');
+  if (pending.length === 0) {
+    pendingEl.innerHTML = '<p class="muted">対応待ちの申請はありません。</p>';
+  } else {
+    const sortedPending = [...pending].sort((a, b) => new Date(a.redeemedAt) - new Date(b.redeemedAt));
+    pendingEl.innerHTML = sortedPending.map((r) => {
+      const child = children.find((c) => c.id === r.childId) || { name: '(不明)' };
+      const date = new Date(r.redeemedAt).toLocaleString('ja-JP');
+      const qtyLabel = r.quantity > 1 ? ` ×${r.quantity}` : '';
+      return `
+        <div class="list-item row-between">
+          <span>${escapeHtml(child.name)}: ${escapeHtml(r.rewardName)}${qtyLabel} <span class="muted">(${date})</span></span>
+          <button class="btn green small" onclick="fulfillRedemption(${r.id})">対応完了にする</button>
+        </div>
+      `;
+    }).join('');
+  }
+
   const logEl = document.getElementById('redemption-log');
   if (redemptions.length === 0) {
     logEl.innerHTML = '<p class="muted">まだ交換履歴はありません。</p>';
@@ -984,8 +1061,18 @@ async function loadRewards() {
     const child = children.find((c) => c.id === r.childId) || { name: '(不明)' };
     const date = new Date(r.redeemedAt).toLocaleString('ja-JP');
     const qtyLabel = r.quantity > 1 ? ` ×${r.quantity}` : '';
-    return `<div class="list-item row-between"><span>${escapeHtml(child.name)}: ${escapeHtml(r.rewardName)}${qtyLabel}</span><span class="muted">-${r.cost}P (${date})</span></div>`;
+    const statusLabel = (r.status || 'pending') === 'fulfilled' ? '対応済み' : '対応待ち';
+    const badgeClass = (r.status || 'pending') === 'fulfilled' ? 'correct' : 'pending';
+    return `<div class="list-item row-between"><span>${escapeHtml(child.name)}: ${escapeHtml(r.rewardName)}${qtyLabel} <span class="badge ${badgeClass}">${statusLabel}</span></span><span class="muted">-${r.cost}P (${date})</span></div>`;
   }).join('');
+}
+
+async function fulfillRedemption(id) {
+  try {
+    await apiPatch(`/api/redemptions/${id}/fulfill`, {});
+    showToast('対応完了にしました');
+    loadRewards();
+  } catch (e) { showToast(e.message); }
 }
 
 async function toggleRewardActive(id, active) {

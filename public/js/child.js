@@ -79,6 +79,12 @@ function showTab(tab) {
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 }
 
+function showTaskCategory(cat) {
+  document.querySelectorAll('.subtab-btn').forEach((b) => b.classList.toggle('active', b.dataset.taskcat === cat));
+  document.querySelectorAll('.task-category-content').forEach((c) => c.classList.add('hidden'));
+  document.getElementById(`taskcat-${cat}`).classList.remove('hidden');
+}
+
 function populateFilterSelect(id, values, allLabel) {
   const select = document.getElementById(id);
   if (!select) return;
@@ -195,6 +201,8 @@ function renderChores() {
     'いつでもできる勉強タスクはまだないよ。', '今は勉強タスクはないよ。', 'まだ勉強をしていないよ。');
   renderChoreCategory('bonus', 'bonus-routine-list', 'bonus-adhoc-list', 'bonus-history',
     'いつでもできるボーナスはまだないよ。', '今はボーナスタスクはないよ。', 'まだボーナスはないよ。');
+  renderChoreCategory('goal', 'goal-routine-list', 'goal-adhoc-list', 'goal-history',
+    'いつでもできる目標はまだないよ。', '今は目標タスクはないよ。', 'まだ目標に取り組んでいないよ。');
 }
 
 function renderChoreCategory(category, routineElId, adhocElId, historyElId, routineEmptyMsg, adhocEmptyMsg, historyEmptyMsg) {
@@ -381,12 +389,15 @@ function renderRewards() {
       return;
     }
     const sorted = [...history].sort((a, b) => new Date(b.redeemedAt) - new Date(a.redeemedAt));
-    el.innerHTML = sorted.map((h) => `
+    el.innerHTML = sorted.map((h) => {
+      const isFulfilled = (h.status || 'pending') === 'fulfilled';
+      return `
       <div class="list-item row-between">
-        <span>${escapeHtml(h.rewardName)}${h.quantity > 1 ? ` ×${h.quantity}` : ''}</span>
+        <span>${escapeHtml(h.rewardName)}${h.quantity > 1 ? ` ×${h.quantity}` : ''} <span class="badge ${isFulfilled ? 'correct' : 'pending'}">${isFulfilled ? '受け取り済み' : '準備中'}</span></span>
         <span class="muted">-${h.cost}P</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   });
 }
 

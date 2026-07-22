@@ -34,9 +34,7 @@
   </div>
   <div class="tabs">
     <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 問題</button>
-    <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
-    <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強</button>
-    <button class="tab-btn" data-tab="bonus" onclick="showTab('bonus')">🏆 ボーナス</button>
+    <button class="tab-btn" data-tab="tasks" onclick="showTab('tasks')">🗂️ タスク</button>
     <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 結果</button>
     <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ご褒美</button>
   </div>
@@ -57,46 +55,69 @@
       </div>
       <div id="quiz-list"></div>
     </div>
-    <div id="tab-chores" class="tab-content hidden">
-      <div class="card">
-        <h3>いつでもできるお手伝い</h3>
-        <div id="routine-chore-list"></div>
+    <div id="tab-tasks" class="tab-content hidden">
+      <div class="subtabs">
+        <button class="subtab-btn active" data-taskcat="household" onclick="showTaskCategory('household')">🧹 お手伝い</button>
+        <button class="subtab-btn" data-taskcat="study" onclick="showTaskCategory('study')">📚 勉強</button>
+        <button class="subtab-btn" data-taskcat="bonus" onclick="showTaskCategory('bonus')">🏆 ボーナス</button>
+        <button class="subtab-btn" data-taskcat="goal" onclick="showTaskCategory('goal')">🎯 目標</button>
       </div>
-      <div class="card">
-        <h3>依頼されたお手伝い</h3>
-        <div id="adhoc-chore-list"></div>
+
+      <div id="taskcat-household" class="task-category-content">
+        <div class="card">
+          <h3>いつでもできるお手伝い</h3>
+          <div id="routine-chore-list"></div>
+        </div>
+        <div class="card">
+          <h3>依頼されたお手伝い</h3>
+          <div id="adhoc-chore-list"></div>
+        </div>
+        <div class="card">
+          <h3>最近のお手伝い</h3>
+          <div id="chore-history"></div>
+        </div>
       </div>
-      <div class="card">
-        <h3>最近のお手伝い</h3>
-        <div id="chore-history"></div>
+      <div id="taskcat-study" class="task-category-content hidden">
+        <div class="card">
+          <h3>いつでもできる勉強</h3>
+          <div id="study-routine-list"></div>
+        </div>
+        <div class="card">
+          <h3>出されている勉強タスク</h3>
+          <div id="study-adhoc-list"></div>
+        </div>
+        <div class="card">
+          <h3>最近の勉強</h3>
+          <div id="study-history"></div>
+        </div>
       </div>
-    </div>
-    <div id="tab-study" class="tab-content hidden">
-      <div class="card">
-        <h3>いつでもできる勉強</h3>
-        <div id="study-routine-list"></div>
+      <div id="taskcat-bonus" class="task-category-content hidden">
+        <div class="card">
+          <h3>いつでもできるボーナス</h3>
+          <div id="bonus-routine-list"></div>
+        </div>
+        <div class="card">
+          <h3>出されているボーナスタスク</h3>
+          <div id="bonus-adhoc-list"></div>
+        </div>
+        <div class="card">
+          <h3>最近のボーナス</h3>
+          <div id="bonus-history"></div>
+        </div>
       </div>
-      <div class="card">
-        <h3>出されている勉強タスク</h3>
-        <div id="study-adhoc-list"></div>
-      </div>
-      <div class="card">
-        <h3>最近の勉強</h3>
-        <div id="study-history"></div>
-      </div>
-    </div>
-    <div id="tab-bonus" class="tab-content hidden">
-      <div class="card">
-        <h3>いつでもできるボーナス</h3>
-        <div id="bonus-routine-list"></div>
-      </div>
-      <div class="card">
-        <h3>出されているボーナスタスク</h3>
-        <div id="bonus-adhoc-list"></div>
-      </div>
-      <div class="card">
-        <h3>最近のボーナス</h3>
-        <div id="bonus-history"></div>
+      <div id="taskcat-goal" class="task-category-content hidden">
+        <div class="card">
+          <h3>いつでもできる目標</h3>
+          <div id="goal-routine-list"></div>
+        </div>
+        <div class="card">
+          <h3>出されている目標タスク</h3>
+          <div id="goal-adhoc-list"></div>
+        </div>
+        <div class="card">
+          <h3>最近の目標</h3>
+          <div id="goal-history"></div>
+        </div>
       </div>
     </div>
     <div id="tab-results" class="tab-content hidden">

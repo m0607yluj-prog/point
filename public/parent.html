@@ -29,9 +29,7 @@
     <button class="tab-btn" data-tab="questions" onclick="showTab('questions')">📝 問題作成</button>
     <button class="tab-btn" data-tab="grading" onclick="showTab('grading')">✅ 採点</button>
     <button class="tab-btn" data-tab="results" onclick="showTab('results')">📋 結果</button>
-    <button class="tab-btn" data-tab="chores" onclick="showTab('chores')">🧹 お手伝い</button>
-    <button class="tab-btn" data-tab="study" onclick="showTab('study')">📚 勉強タスク</button>
-    <button class="tab-btn" data-tab="bonus" onclick="showTab('bonus')">🏆 ボーナス</button>
+    <button class="tab-btn" data-tab="tasks" onclick="showTab('tasks')">🗂️ タスク</button>
     <button class="tab-btn" data-tab="points" onclick="showTab('points')">⭐ ポイント</button>
     <button class="tab-btn" data-tab="rewards" onclick="showTab('rewards')">🎁 ご褒美</button>
     <button class="tab-btn" data-tab="settings" onclick="showTab('settings')">⚙️ 設定</button>
@@ -175,146 +173,216 @@
       </div>
     </div>
 
-    <div id="tab-chores" class="tab-content hidden">
-      <div class="card">
-        <h3>承認待ちのお手伝い</h3>
-        <div id="chore-approval-list"></div>
+    <div id="tab-tasks" class="tab-content hidden">
+      <div class="subtabs">
+        <button class="subtab-btn active" data-taskcat="household" onclick="showTaskCategory('household')">🧹 お手伝い</button>
+        <button class="subtab-btn" data-taskcat="study" onclick="showTaskCategory('study')">📚 勉強タスク</button>
+        <button class="subtab-btn" data-taskcat="bonus" onclick="showTaskCategory('bonus')">🏆 ボーナス</button>
+        <button class="subtab-btn" data-taskcat="goal" onclick="showTaskCategory('goal')">🎯 目標タスク</button>
       </div>
-      <div class="card">
-        <h3>定型のお手伝いを追加</h3>
-        <p class="muted">いつでも実行できる、くり返し系のお手伝い（1日1回まで報告できます）</p>
-        <label>お手伝い名</label>
-        <input type="text" id="new-routine-chore-name" placeholder="例: お風呂そうじ" />
-        <label>ポイント（達成度レベルを使わない場合）</label>
-        <input type="number" id="new-routine-chore-points" value="10" min="0" />
-        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
-        <div id="routine-levels"></div>
-        <button class="btn small secondary" type="button" onclick="addLevelRow('routine-levels')">レベルを追加</button>
-        <button class="btn" onclick="addRoutineChore()">追加する</button>
-      </div>
-      <div class="card">
-        <h3>随時のお手伝いを依頼</h3>
-        <p class="muted">1回限りのお手伝い。特定の子どもに割り当てることもできます</p>
-        <label>お手伝い名</label>
-        <input type="text" id="new-adhoc-chore-name" placeholder="例: 買い物についてきて" />
-        <label>ポイント（達成度レベルを使わない場合）</label>
-        <input type="number" id="new-adhoc-chore-points" value="10" min="0" />
-        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
-        <div id="adhoc-levels"></div>
-        <button class="btn small secondary" type="button" onclick="addLevelRow('adhoc-levels')">レベルを追加</button>
-        <label>対象の子ども</label>
-        <select id="new-adhoc-chore-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn" onclick="addAdhocChore()">依頼する</button>
-      </div>
-      <div class="card">
-        <h3>登録済みのお手伝い</h3>
-        <div id="chores-list"></div>
-      </div>
-    </div>
 
-    <div id="tab-study" class="tab-content hidden">
-      <div class="card">
-        <h3>承認待ちの勉強タスク</h3>
-        <div id="study-approval-list"></div>
+      <div id="taskcat-household" class="task-category-content">
+        <div class="card">
+          <h3>承認待ちのお手伝い</h3>
+          <div id="chore-approval-list"></div>
+        </div>
+        <div class="card">
+          <h3>定型のお手伝いを追加</h3>
+          <p class="muted">いつでも実行できる、くり返し系のお手伝い（1日1回まで報告できます）</p>
+          <label>お手伝い名</label>
+          <input type="text" id="new-routine-chore-name" placeholder="例: お風呂そうじ" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-routine-chore-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="routine-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('routine-levels')">レベルを追加</button>
+          <button class="btn" onclick="addRoutineChore()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>随時のお手伝いを依頼</h3>
+          <p class="muted">1回限りのお手伝い。特定の子どもに割り当てることもできます</p>
+          <label>お手伝い名</label>
+          <input type="text" id="new-adhoc-chore-name" placeholder="例: 買い物についてきて" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-adhoc-chore-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="adhoc-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('adhoc-levels')">レベルを追加</button>
+          <label>対象の子ども</label>
+          <select id="new-adhoc-chore-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addAdhocChore()">依頼する</button>
+        </div>
+        <div class="card">
+          <h3>登録済みのお手伝い</h3>
+          <div id="chores-list"></div>
+        </div>
       </div>
-      <div class="card">
-        <h3>勉強タスクを追加</h3>
-        <p class="muted">例: 国語 ワーク12〜20ページ / チャレンジタッチ 8月号Lesson1</p>
-        <label>内容</label>
-        <input type="text" id="new-study-task-name" placeholder="例: ワーク12〜20ページ" />
-        <label>教科（任意）</label>
-        <input type="text" id="new-study-task-subject" placeholder="例: 国語" />
-        <label>単元・教材（任意）</label>
-        <input type="text" id="new-study-task-unit" placeholder="例: チャレンジタッチ 8月号Lesson1" />
-        <label>ポイント（達成度レベルを使わない場合）</label>
-        <input type="number" id="new-study-task-points" value="10" min="0" />
-        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
-        <div id="study-levels"></div>
-        <button class="btn small secondary" type="button" onclick="addLevelRow('study-levels')">レベルを追加</button>
-        <label>対象の子ども</label>
-        <select id="new-study-task-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn" onclick="addStudyTask()">追加する</button>
-      </div>
-      <div class="card">
-        <h3>繰り返しタスクを追加</h3>
-        <p class="muted">例: 7日間で5回やる、できないと減点。1回ごとのポイントは達成のたびに付与されます。</p>
-        <label>内容</label>
-        <input type="text" id="new-recurring-task-name" placeholder="例: 音読" />
-        <label>教科（任意）</label>
-        <input type="text" id="new-recurring-task-subject" placeholder="例: 国語" />
-        <label>単元・教材（任意）</label>
-        <input type="text" id="new-recurring-task-unit" placeholder="例: 音読カード" />
-        <label>1回ごとのポイント（達成度レベルを使わない場合）</label>
-        <input type="number" id="new-recurring-task-points" value="10" min="0" />
-        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
-        <div id="recurring-levels"></div>
-        <button class="btn small secondary" type="button" onclick="addLevelRow('recurring-levels')">レベルを追加</button>
-        <label>期間（日数）</label>
-        <input type="number" id="new-recurring-task-period" value="7" min="1" />
-        <label>期間内の目標回数</label>
-        <input type="number" id="new-recurring-task-target" value="5" min="1" />
-        <label>目標未達成時の減点</label>
-        <input type="number" id="new-recurring-task-penalty" value="10" min="0" />
-        <label>対象の子ども</label>
-        <select id="new-recurring-task-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn" onclick="addRecurringStudyTask()">追加する</button>
-      </div>
-      <div class="card">
-        <h3>CSVで一括登録</h3>
-        <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
-        <textarea id="bulk-study-csv-text" rows="8" placeholder="教科,単元,内容,ポイント&#10;国語,ワーク,12〜20ページ,10&#10;算数,チャレンジタッチ,8月号Lesson1,5"></textarea>
-        <label>対象の子ども</label>
-        <select id="bulk-study-csv-assigned-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn green" onclick="addBulkCsvStudyTasks()">CSVを登録する</button>
-      </div>
-      <div class="card">
-        <h3>登録済みの勉強タスク</h3>
-        <div id="study-tasks-list"></div>
-      </div>
-    </div>
 
-    <div id="tab-bonus" class="tab-content hidden">
-      <div class="card">
-        <h3>承認待ちのボーナスタスク</h3>
-        <div id="bonus-approval-list"></div>
+      <div id="taskcat-study" class="task-category-content hidden">
+        <div class="card">
+          <h3>承認待ちの勉強タスク</h3>
+          <div id="study-approval-list"></div>
+        </div>
+        <div class="card">
+          <h3>勉強タスクを追加</h3>
+          <p class="muted">例: 国語 ワーク12〜20ページ / チャレンジタッチ 8月号Lesson1</p>
+          <label>内容</label>
+          <input type="text" id="new-study-task-name" placeholder="例: ワーク12〜20ページ" />
+          <label>教科（任意）</label>
+          <input type="text" id="new-study-task-subject" placeholder="例: 国語" />
+          <label>単元・教材（任意）</label>
+          <input type="text" id="new-study-task-unit" placeholder="例: チャレンジタッチ 8月号Lesson1" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-study-task-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="study-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('study-levels')">レベルを追加</button>
+          <label>対象の子ども</label>
+          <select id="new-study-task-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addStudyTask()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>繰り返しタスクを追加</h3>
+          <p class="muted">例: 7日間で5回やる、できないと減点。1回ごとのポイントは達成のたびに付与されます。</p>
+          <label>内容</label>
+          <input type="text" id="new-recurring-task-name" placeholder="例: 音読" />
+          <label>教科（任意）</label>
+          <input type="text" id="new-recurring-task-subject" placeholder="例: 国語" />
+          <label>単元・教材（任意）</label>
+          <input type="text" id="new-recurring-task-unit" placeholder="例: 音読カード" />
+          <label>1回ごとのポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-recurring-task-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="recurring-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('recurring-levels')">レベルを追加</button>
+          <label>期間（日数）</label>
+          <input type="number" id="new-recurring-task-period" value="7" min="1" />
+          <label>期間内の目標回数</label>
+          <input type="number" id="new-recurring-task-target" value="5" min="1" />
+          <label>目標未達成時の減点</label>
+          <input type="number" id="new-recurring-task-penalty" value="10" min="0" />
+          <label>対象の子ども</label>
+          <select id="new-recurring-task-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addRecurringStudyTask()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>CSVで一括登録</h3>
+          <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
+          <textarea id="bulk-study-csv-text" rows="8" placeholder="教科,単元,内容,ポイント&#10;国語,ワーク,12〜20ページ,10&#10;算数,チャレンジタッチ,8月号Lesson1,5"></textarea>
+          <label>対象の子ども</label>
+          <select id="bulk-study-csv-assigned-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn green" onclick="addBulkCsvStudyTasks()">CSVを登録する</button>
+        </div>
+        <div class="card">
+          <h3>登録済みの勉強タスク</h3>
+          <div id="study-tasks-list"></div>
+        </div>
       </div>
-      <div class="card">
-        <h3>ボーナスタスクを追加</h3>
-        <p class="muted">例: 〇〇大会優勝 / 実力テストで80点以上。達成度レベルを使うと、優勝・準優勝やテストの点数帯ごとにポイントを変えられます。</p>
-        <label>内容</label>
-        <input type="text" id="new-bonus-task-name" placeholder="例: 〇〇大会優勝" />
-        <label>ポイント（達成度レベルを使わない場合）</label>
-        <input type="number" id="new-bonus-task-points" value="30" min="0" />
-        <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
-        <div id="bonus-levels"></div>
-        <button class="btn small secondary" type="button" onclick="addLevelRow('bonus-levels')">レベルを追加</button>
-        <label>対象の子ども</label>
-        <select id="new-bonus-task-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn" onclick="addBonusTask()">追加する</button>
+
+      <div id="taskcat-bonus" class="task-category-content hidden">
+        <div class="card">
+          <h3>承認待ちのボーナスタスク</h3>
+          <div id="bonus-approval-list"></div>
+        </div>
+        <div class="card">
+          <h3>ボーナスタスクを追加</h3>
+          <p class="muted">例: 〇〇大会優勝 / 実力テストで80点以上。達成度レベルを使うと、優勝・準優勝やテストの点数帯ごとにポイントを変えられます。</p>
+          <label>内容</label>
+          <input type="text" id="new-bonus-task-name" placeholder="例: 〇〇大会優勝" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-bonus-task-points" value="30" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="bonus-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('bonus-levels')">レベルを追加</button>
+          <label>対象の子ども</label>
+          <select id="new-bonus-task-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addBonusTask()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>CSVで一括登録</h3>
+          <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
+          <textarea id="bulk-bonus-csv-text" rows="6" placeholder="教科,単元,内容,ポイント&#10;,,〇〇大会優勝,50&#10;,,実力テストで80点以上,30"></textarea>
+          <label>対象の子ども</label>
+          <select id="bulk-bonus-csv-assigned-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn green" onclick="addBulkCsvBonusTasks()">CSVを登録する</button>
+        </div>
+        <div class="card">
+          <h3>登録済みのボーナスタスク</h3>
+          <div id="bonus-tasks-list"></div>
+        </div>
       </div>
-      <div class="card">
-        <h3>CSVで一括登録</h3>
-        <p class="muted">1行目は見出し（教科,単元,内容,ポイント）にしてください。「内容」列以外は空欄でも構いません。</p>
-        <textarea id="bulk-bonus-csv-text" rows="6" placeholder="教科,単元,内容,ポイント&#10;,,〇〇大会優勝,50&#10;,,実力テストで80点以上,30"></textarea>
-        <label>対象の子ども</label>
-        <select id="bulk-bonus-csv-assigned-child">
-          <option value="">誰でもOK</option>
-        </select>
-        <button class="btn green" onclick="addBulkCsvBonusTasks()">CSVを登録する</button>
-      </div>
-      <div class="card">
-        <h3>登録済みのボーナスタスク</h3>
-        <div id="bonus-tasks-list"></div>
+
+      <div id="taskcat-goal" class="task-category-content hidden">
+        <div class="card">
+          <h3>承認待ちの目標タスク</h3>
+          <div id="goal-approval-list"></div>
+        </div>
+        <div class="card">
+          <h3>定型の目標タスクを追加</h3>
+          <p class="muted">いつでも実行できる、くり返し系の目標（1日1回まで報告できます）</p>
+          <label>内容</label>
+          <input type="text" id="new-routine-goal-name" placeholder="例: ピアノの練習をする" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-routine-goal-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="routine-goal-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('routine-goal-levels')">レベルを追加</button>
+          <button class="btn" onclick="addRoutineGoalTask()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>随時の目標タスクを依頼</h3>
+          <p class="muted">1回限りの目標。特定の子どもに割り当てることもできます</p>
+          <label>内容</label>
+          <input type="text" id="new-adhoc-goal-name" placeholder="例: 自分の部屋を片付ける" />
+          <label>ポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-adhoc-goal-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="adhoc-goal-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('adhoc-goal-levels')">レベルを追加</button>
+          <label>対象の子ども</label>
+          <select id="new-adhoc-goal-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addAdhocGoalTask()">依頼する</button>
+        </div>
+        <div class="card">
+          <h3>繰り返し目標タスクを追加</h3>
+          <p class="muted">例: 7日間で3回やる、できないと減点。1回ごとのポイントは達成のたびに付与されます。</p>
+          <label>内容</label>
+          <input type="text" id="new-recurring-goal-name" placeholder="例: 縄跳び100回" />
+          <label>1回ごとのポイント（達成度レベルを使わない場合）</label>
+          <input type="number" id="new-recurring-goal-points" value="10" min="0" />
+          <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
+          <div id="recurring-goal-levels"></div>
+          <button class="btn small secondary" type="button" onclick="addLevelRow('recurring-goal-levels')">レベルを追加</button>
+          <label>期間（日数）</label>
+          <input type="number" id="new-recurring-goal-period" value="7" min="1" />
+          <label>期間内の目標回数</label>
+          <input type="number" id="new-recurring-goal-target" value="3" min="1" />
+          <label>目標未達成時の減点</label>
+          <input type="number" id="new-recurring-goal-penalty" value="10" min="0" />
+          <label>対象の子ども</label>
+          <select id="new-recurring-goal-child">
+            <option value="">誰でもOK</option>
+          </select>
+          <button class="btn" onclick="addRecurringGoalTask()">追加する</button>
+        </div>
+        <div class="card">
+          <h3>登録済みの目標タスク</h3>
+          <div id="goal-tasks-list"></div>
+        </div>
       </div>
     </div>
 
@@ -326,6 +394,11 @@
     </div>
 
     <div id="tab-rewards" class="tab-content hidden">
+      <div class="card">
+        <h3>ご褒美の申請（対応待ち）</h3>
+        <p class="muted">例: 「スマホ10分追加」を申請した場合、実際にスマホの時間を追加してから「対応完了にする」を押してください。</p>
+        <div id="redemption-pending-list"></div>
+      </div>
       <div class="card">
         <h3>ご褒美を追加</h3>
         <label>ご褒美名</label>
