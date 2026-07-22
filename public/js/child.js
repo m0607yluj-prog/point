@@ -244,10 +244,11 @@ function renderChoreCategory(category, routineElId, adhocElId, historyElId, rout
       const statusLabel = l.status === 'pending' ? '承認待ち'
         : l.status === 'approved' ? `${countLabel}${l.levelLabel || '完了'}`
         : l.status === 'period_penalty' ? `目標未達成 (${l.completedCount}/${l.targetCount}回)`
+        : l.status === 'expired' ? '期限切れ'
         : 'やり直し';
       const badgeClass = l.status === 'pending' ? 'pending'
         : l.status === 'approved' ? 'correct'
-        : l.status === 'period_penalty' ? 'expired'
+        : (l.status === 'period_penalty' || l.status === 'expired') ? 'expired'
         : 'incorrect';
       return `
         <div class="list-item row-between">
@@ -287,6 +288,8 @@ function renderChoreRow(chore, log, category) {
   } else if (log && log.status === 'approved') {
     const countLabel = log.count > 1 ? `${log.count}回分 ` : '';
     statusHtml = `<span class="badge correct">${countLabel}${escapeHtml(log.levelLabel || '完了！')}</span>`;
+  } else if (log && log.status === 'expired') {
+    statusHtml = '<span class="badge expired">期限切れ</span>';
   } else if (category === 'study') {
     statusHtml = `
       <span class="btn-row" style="gap:4px;">
@@ -304,6 +307,7 @@ function renderChoreRow(chore, log, category) {
   const progressLabel = progress
     ? `<div class="muted">今の期間: ${progress.completedCount}/${progress.targetCount}回（あと${progress.daysLeft}日）</div>`
     : '';
+  const dueLabel = chore.dueAt ? `<div class="muted">期限: ${new Date(chore.dueAt).toLocaleString('ja-JP')}</div>` : '';
   return `
     <div class="list-item">
       <div class="row-between">
@@ -311,6 +315,7 @@ function renderChoreRow(chore, log, category) {
         ${statusHtml}
       </div>
       ${progressLabel}
+      ${dueLabel}
     </div>
   `;
 }

@@ -671,7 +671,7 @@ app.get('/api/chores', ah(async (req, res) => {
 app.post('/api/chores', ah(async (req, res) => {
   const {
     name, type, points, assignedChildId, category, subject, unit, levels,
-    periodDays, targetCount, periodPenalty
+    periodDays, targetCount, periodPenalty, dueAt, latePenalty
   } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'お手伝いの名前を入力してください' });
   if (type !== 'routine' && type !== 'adhoc') return res.status(400).json({ error: '種類が不正です' });
@@ -689,6 +689,8 @@ app.post('/api/chores', ah(async (req, res) => {
       periodDays: type === 'routine' ? Math.max(0, Number(periodDays) || 0) : 0,
       targetCount: type === 'routine' ? Math.max(0, Number(targetCount) || 0) : 0,
       periodPenalty: Math.max(0, Number(periodPenalty) || 0),
+      dueAt: type === 'adhoc' ? normalizeDueAt(dueAt) : null,
+      latePenalty: Math.max(0, Number(latePenalty) || 0),
       active: true,
       createdAt: now()
     };
@@ -716,6 +718,8 @@ app.patch('/api/chores/:id', ah(async (req, res) => {
     if (updates.periodDays !== undefined) item.periodDays = Math.max(0, Number(updates.periodDays) || 0);
     if (updates.targetCount !== undefined) item.targetCount = Math.max(0, Number(updates.targetCount) || 0);
     if (updates.periodPenalty !== undefined) item.periodPenalty = Math.max(0, Number(updates.periodPenalty) || 0);
+    if (updates.dueAt !== undefined) item.dueAt = item.type === 'adhoc' ? normalizeDueAt(updates.dueAt) : null;
+    if (updates.latePenalty !== undefined) item.latePenalty = Math.max(0, Number(updates.latePenalty) || 0);
     if (updates.active !== undefined) item.active = Boolean(updates.active);
     return item;
   });
@@ -811,8 +815,8 @@ app.post('/api/chore-logs', ah(async (req, res) => {
       );
       if (already) return { error: '今日はすでに報告済みです' };
     } else {
-      const already = db.choreLogs.find((l) => l.choreId === chore.id && (l.status === 'pending' || l.status === 'approved'));
-      if (already) return { error: 'このお手伝いはすでに報告されています' };
+      const already = db.choreLogs.find((l) => l.choreId === chore.id && (l.status === 'pending' || l.status === 'approved' || l.status === 'expired'));
+      if (already) return { error: chore.dueAt && chore.dueAt < now() ? '期限が過ぎています' : 'このお手伝いはすでに報告されています' };
     }
 
     const log = {

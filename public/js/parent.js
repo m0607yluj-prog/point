@@ -746,12 +746,16 @@ async function addRoutineGoalTask() {
 async function addAdhocGoalTask() {
   const name = document.getElementById('new-adhoc-goal-name').value;
   const points = document.getElementById('new-adhoc-goal-points').value;
+  const dueAt = document.getElementById('new-adhoc-goal-due').value;
+  const latePenalty = document.getElementById('new-adhoc-goal-penalty').value;
   const assignedChildId = document.getElementById('new-adhoc-goal-child').value;
   const levels = collectLevels('adhoc-goal-levels');
   if (!name.trim()) { showToast('内容を入力してください'); return; }
   try {
-    await apiPost('/api/chores', { name, type: 'adhoc', points, levels, assignedChildId: assignedChildId || null, category: 'goal' });
+    await apiPost('/api/chores', { name, type: 'adhoc', points, levels, dueAt, latePenalty, assignedChildId: assignedChildId || null, category: 'goal' });
     document.getElementById('new-adhoc-goal-name').value = '';
+    document.getElementById('new-adhoc-goal-due').value = '';
+    document.getElementById('new-adhoc-goal-penalty').value = '0';
     clearLevelRows('adhoc-goal-levels');
     showToast('依頼しました');
     loadGoalTasks();
@@ -805,6 +809,7 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
       const periodLabel = (c.periodDays > 0 && c.targetCount > 0)
         ? `${c.periodDays}日間で${c.targetCount}回未満だと-${c.periodPenalty}P`
         : '';
+      const dueLabel = c.dueAt ? `期限: ${new Date(c.dueAt).toLocaleString('ja-JP')}${c.latePenalty ? `（過ぎると-${c.latePenalty}P）` : ''}` : '';
       return `
         <div class="list-item">
           <div class="row-between">
@@ -817,6 +822,7 @@ async function renderChoreCategory(category, listElId, approvalElId, emptyMessag
           </div>
           ${tags ? `<div class="muted">${tags}</div>` : ''}
           ${periodLabel ? `<div class="muted">${periodLabel}</div>` : ''}
+          ${dueLabel ? `<div class="muted">${dueLabel}</div>` : ''}
         </div>
       `;
     }).join('');
@@ -870,6 +876,7 @@ async function editChore(id) {
   const categoryLabel = chore.category === 'study' ? '勉強タスク' : chore.category === 'bonus' ? 'ボーナスタスク' : chore.category === 'goal' ? '目標タスク' : 'お手伝い';
   const hasSubjectUnit = chore.category === 'study' || chore.category === 'bonus';
   const isRoutine = chore.type === 'routine';
+  const hasDueDate = chore.category === 'goal' && chore.type === 'adhoc';
   const levelsId = `edit-chore-levels-${id}`;
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -896,6 +903,12 @@ async function editChore(id) {
         <input type="number" id="edit-chore-target-${id}" value="${chore.targetCount || ''}" min="0" />
         <label>目標未達成時の減点</label>
         <input type="number" id="edit-chore-penalty-${id}" value="${chore.periodPenalty || 0}" min="0" />
+      ` : ''}
+      ${hasDueDate ? `
+        <label>期限（任意）</label>
+        <input type="datetime-local" id="edit-chore-due-${id}" value="${chore.dueAt ? toLocalDateTimeValue(chore.dueAt) : ''}" />
+        <label>期限切れの減点（任意）</label>
+        <input type="number" id="edit-chore-due-penalty-${id}" value="${chore.latePenalty || 0}" min="0" />
       ` : ''}
       <label>対象の子ども</label>
       <select id="edit-chore-child-${id}"><option value="">誰でもOK</option></select>
@@ -939,6 +952,10 @@ async function saveChoreEdit(id, btn) {
     payload.periodDays = overlay.querySelector(`#edit-chore-period-${id}`).value;
     payload.targetCount = overlay.querySelector(`#edit-chore-target-${id}`).value;
     payload.periodPenalty = overlay.querySelector(`#edit-chore-penalty-${id}`).value;
+  }
+  if (chore.category === 'goal' && chore.type === 'adhoc') {
+    payload.dueAt = overlay.querySelector(`#edit-chore-due-${id}`).value;
+    payload.latePenalty = overlay.querySelector(`#edit-chore-due-penalty-${id}`).value;
   }
   try {
     await apiPatch(`/api/chores/${id}`, payload);

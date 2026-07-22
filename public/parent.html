@@ -351,6 +351,10 @@
           <label>達成度レベル（任意・設定するとポイントより優先されます）</label>
           <div id="adhoc-goal-levels"></div>
           <button class="btn small secondary" type="button" onclick="addLevelRow('adhoc-goal-levels')">レベルを追加</button>
+          <label>期限（任意）</label>
+          <input type="datetime-local" id="new-adhoc-goal-due" />
+          <label>期限切れの減点（任意）</label>
+          <input type="number" id="new-adhoc-goal-penalty" value="0" min="0" />
           <label>対象の子ども</label>
           <select id="new-adhoc-goal-child">
             <option value="">誰でもOK</option>
