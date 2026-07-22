@@ -67,6 +67,7 @@ async function loadChildren() {
       <div class="list-item row-between">
         <span>${escapeHtml(c.avatar)} ${escapeHtml(c.name)} <span class="muted">(${c.points}P)</span></span>
         <span>
+          <button class="btn small secondary" onclick="showChildStatus(${c.id}, '${escapeHtml(c.name)}')">出されている内容</button>
           <button class="btn small secondary" onclick="copyChildUrl(${c.id}, '${escapeHtml(c.name)}')">専用URLをコピー</button>
           <button class="btn small secondary" onclick="deleteChild(${c.id}, '${escapeHtml(c.name)}')">削除</button>
         </span>
@@ -74,6 +75,64 @@ async function loadChildren() {
     `).join('');
   }
   populateAdhocChildSelect(children);
+}
+
+const CHORE_CATEGORY_LABELS = { household: 'お手伝い', study: '勉強タスク', bonus: 'ボーナス', goal: '目標タスク' };
+
+async function showChildStatus(childId, name) {
+  const [questions, answers, chores, allChoreLogs] = await Promise.all([
+    apiGet('/api/questions?activeOnly=true'),
+    apiGet(`/api/answers?childId=${childId}`),
+    apiGet('/api/chores?activeOnly=true'),
+    apiGet('/api/chore-logs')
+  ]);
+
+  const answeredIds = new Set(answers.map((a) => a.questionId));
+  const openQuestions = questions.filter((q) => !answeredIds.has(q.id) && (!q.assignedChildId || q.assignedChildId === childId));
+
+  const todayKeyClient = new Date().toISOString().slice(0, 10);
+  const openChores = chores.filter((c) => {
+    if (c.assignedChildId && c.assignedChildId !== childId) return false;
+    if (c.type === 'routine') {
+      const doneToday = allChoreLogs.some((l) => l.choreId === c.id && l.childId === childId && l.dateKey === todayKeyClient && l.status !== 'rejected');
+      return !doneToday;
+    }
+    const claimed = allChoreLogs.some((l) => l.choreId === c.id && (l.status === 'pending' || l.status === 'approved' || l.status === 'expired'));
+    return !claimed;
+  });
+
+  const questionsHtml = openQuestions.length === 0
+    ? '<p class="muted">今は問題はありません。</p>'
+    : openQuestions.map((q) => {
+      const dueLabel = q.dueAt ? ` <span class="muted">期限: ${new Date(q.dueAt).toLocaleString('ja-JP')}</span>` : '';
+      const tags = [q.subject, q.unit].filter((t) => t).join(' / ');
+      return `<div class="list-item">${escapeHtml(q.question)} <span class="muted">(${q.points}P${tags ? ' / ' + escapeHtml(tags) : ''})</span>${dueLabel}</div>`;
+    }).join('');
+
+  const choresHtml = openChores.length === 0
+    ? '<p class="muted">今は未対応のタスクはありません。</p>'
+    : openChores.map((c) => {
+      const typeLabel = c.type === 'routine' ? '定型' : '随時';
+      const catLabel = CHORE_CATEGORY_LABELS[c.category || 'household'];
+      const dueLabel = c.dueAt ? ` <span class="muted">期限: ${new Date(c.dueAt).toLocaleString('ja-JP')}</span>` : '';
+      return `<div class="list-item">[${catLabel} / ${typeLabel}] ${escapeHtml(c.name)} <span class="muted">(${c.points}P)</span>${dueLabel}</div>`;
+    }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="card" style="max-width:480px; max-height:90vh; overflow-y:auto;">
+      <h3>${escapeHtml(name)}さんに出されている内容</h3>
+      <h4>📝 問題（未回答）</h4>
+      ${questionsHtml}
+      <h4>🗂️ タスク（未対応）</h4>
+      ${choresHtml}
+      <div class="btn-row">
+        <button class="btn secondary" onclick="this.closest('.overlay').remove()">閉じる</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 async function copyChildUrl(id, name) {
