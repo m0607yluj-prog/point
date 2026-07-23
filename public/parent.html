@@ -139,6 +139,11 @@
             <option value="expired">期限切れ</option>
           </select>
         </div>
+        <div class="btn-row">
+          <label><input type="checkbox" id="question-select-all" onchange="toggleAllQuestionChecks(this.checked)" style="width:auto;" /> 表示中をすべて選択</label>
+          <input type="datetime-local" id="bulk-extend-due" style="width:auto;" />
+          <button class="btn small" onclick="bulkExtendQuestionDeadlines()">選んだ問題の期限をまとめて更新する</button>
+        </div>
         <div id="questions-list"></div>
       </div>
     </div>

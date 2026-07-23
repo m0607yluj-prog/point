@@ -327,6 +327,8 @@ function renderQuestionsList() {
     el.innerHTML = '<p class="muted">条件に一致する問題がありません。</p>';
     return;
   }
+  const selectAllEl = document.getElementById('question-select-all');
+  if (selectAllEl) selectAllEl.checked = false;
   el.innerHTML = questions.map((q) => {
     const assignedChild = cachedChildrenForQuestions.find((c) => c.id === q.assignedChildId);
     const dueLabel = q.dueAt ? `期限: ${new Date(q.dueAt).toLocaleString('ja-JP')}${q.latePenalty > 0 ? ` (未回答-${q.latePenalty}P)` : ''}` : '';
@@ -334,7 +336,7 @@ function renderQuestionsList() {
     return `
     <div class="list-item">
       <div class="row-between">
-        <span>${escapeHtml(q.question)} <span class="muted">(${q.type === 'choice' ? '選択式' : '記述式'} / ${q.points}P${assignedChild ? ` / ${escapeHtml(assignedChild.name)}へ` : ''})</span></span>
+        <label><input type="checkbox" class="question-check" value="${q.id}" style="width:auto;" /> ${escapeHtml(q.question)} <span class="muted">(${q.type === 'choice' ? '選択式' : '記述式'} / ${q.points}P${assignedChild ? ` / ${escapeHtml(assignedChild.name)}へ` : ''})</span></label>
         <span>
           <button class="btn small secondary" onclick="editQuestion(${q.id})">編集</button>
           <button class="btn small secondary" onclick="toggleQuestionActive(${q.id}, ${!q.active})">${q.active ? '非公開にする' : '公開する'}</button>
@@ -348,6 +350,24 @@ function renderQuestionsList() {
     </div>
   `;
   }).join('');
+}
+
+function toggleAllQuestionChecks(checked) {
+  document.querySelectorAll('.question-check').forEach((el) => { el.checked = checked; });
+}
+
+async function bulkExtendQuestionDeadlines() {
+  const dueAt = document.getElementById('bulk-extend-due').value;
+  if (!dueAt) { showToast('新しい期限を入力してください'); return; }
+  const ids = [...document.querySelectorAll('.question-check:checked')].map((el) => Number(el.value));
+  if (ids.length === 0) { showToast('問題を選んでください'); return; }
+  const ok = await askConfirm(`選んだ${ids.length}件の期限を更新しますか？`);
+  if (!ok) return;
+  try {
+    await Promise.all(ids.map((id) => apiPatch(`/api/questions/${id}/extend-deadline`, { dueAt })));
+    showToast(`${ids.length}件の期限を更新しました`);
+    loadQuestions();
+  } catch (e) { showToast(e.message); }
 }
 
 async function toggleQuestionActive(id, active) {
@@ -594,6 +614,12 @@ function renderResultsList() {
           ${a.status === 'incorrect' ? `<button class="btn green small" onclick="correctGrading(${a.id}, true)">正解に直す</button>` : ''}
           ${a.status === 'correct' ? `<button class="btn pink small" onclick="correctGrading(${a.id}, false)">不正解に直す</button>` : ''}
         </div>`
+      : a.status === 'expired'
+      ? `<div class="btn-row">
+          <input type="datetime-local" id="reopen-due-${a.id}" value="${toLocalDateTimeValue(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())}" style="width:auto;" />
+          <button class="btn green small" onclick="reopenAnswer(${a.id})">期限延長して回答できるようにする</button>
+          ${a.pointsAwarded !== 0 ? `<button class="btn pink small" onclick="cancelPenalty(${a.id})">減点を取り消す</button>` : ''}
+        </div>`
       : '';
     return `
       <div class="list-item">
@@ -616,6 +642,28 @@ async function correctGrading(id, correct) {
   try {
     await apiPatch(`/api/answers/${id}/grade`, { correct });
     showToast('採点を修正しました');
+    loadResults();
+  } catch (e) { showToast(e.message); }
+}
+
+async function reopenAnswer(id) {
+  const dueAt = document.getElementById(`reopen-due-${id}`).value;
+  if (!dueAt) { showToast('新しい期限を入力してください'); return; }
+  const ok = await askConfirm('期限を延長して、もう一度回答できるようにしますか？');
+  if (!ok) return;
+  try {
+    await apiPatch(`/api/answers/${id}/reopen`, { dueAt });
+    showToast('期限を延長しました');
+    loadResults();
+  } catch (e) { showToast(e.message); }
+}
+
+async function cancelPenalty(id) {
+  const ok = await askConfirm('この減点を取り消してポイントを戻しますか？');
+  if (!ok) return;
+  try {
+    await apiPatch(`/api/answers/${id}/cancel-penalty`, {});
+    showToast('減点を取り消しました');
     loadResults();
   } catch (e) { showToast(e.message); }
 }

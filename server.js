@@ -414,6 +414,23 @@ app.patch('/api/questions/:id', ah(async (req, res) => {
   res.json(q);
 }));
 
+// Parent extends a question's deadline and clears any already-expired answer
+// records for it, so every child who got auto-penalized can try again.
+// (Does not refund penalties already applied — see /api/answers/:id/cancel-penalty for that.)
+app.patch('/api/questions/:id/extend-deadline', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const { dueAt } = req.body;
+  const question = await withDb((db) => {
+    const item = db.questions.find((x) => x.id === id);
+    if (!item) return null;
+    item.dueAt = normalizeDueAt(dueAt);
+    db.answers = db.answers.filter((a) => !(a.questionId === id && a.status === 'expired'));
+    return item;
+  });
+  if (!question) return res.status(404).json({ error: '見つかりません' });
+  res.json(question);
+}));
+
 app.delete('/api/questions/:id', ah(async (req, res) => {
   const id = Number(req.params.id);
   await withDb((db) => {
@@ -527,6 +544,45 @@ app.patch('/api/answers/:id/grade', ah(async (req, res) => {
         scheduleRetry(db, question, child.id);
       }
     }
+    return { answer, child };
+  });
+  if (!result) return res.status(404).json({ error: '見つかりません' });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+}));
+
+// Parent extends the deadline on an expired answer's question and removes the
+// synthetic "expired" record so the child can submit a real answer again.
+// (Does not touch the penalty already applied — pair with cancel-penalty for that.)
+app.patch('/api/answers/:id/reopen', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const { dueAt } = req.body;
+  const result = await withDb((db) => {
+    const answer = db.answers.find((a) => a.id === id);
+    if (!answer) return null;
+    if (answer.status !== 'expired') return { error: '期限切れの回答のみ延長できます' };
+    const question = db.questions.find((q) => q.id === answer.questionId);
+    if (question) question.dueAt = normalizeDueAt(dueAt);
+    db.answers = db.answers.filter((a) => a.id !== id);
+    return { question };
+  });
+  if (!result) return res.status(404).json({ error: '見つかりません' });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+}));
+
+// Parent cancels the penalty already applied for an expired answer, refunding
+// the deducted points. Leaves the answer record (and question deadline) as is.
+app.patch('/api/answers/:id/cancel-penalty', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await withDb((db) => {
+    const answer = db.answers.find((a) => a.id === id);
+    if (!answer) return null;
+    if (answer.status !== 'expired') return { error: '期限切れの回答のみ減点を取り消せます' };
+    if (answer.pointsAwarded === 0) return { error: 'すでに減点は取り消されています' };
+    const child = db.children.find((c) => c.id === answer.childId);
+    if (child) child.points -= answer.pointsAwarded;
+    answer.pointsAwarded = 0;
     return { answer, child };
   });
   if (!result) return res.status(404).json({ error: '見つかりません' });
