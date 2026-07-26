@@ -928,6 +928,45 @@ app.patch('/api/chore-logs/:id/grade', ah(async (req, res) => {
   res.json(result);
 }));
 
+// Parent extends the deadline on an expired chore log's chore and removes the
+// synthetic "expired" record so the child can report again. Mirrors
+// /api/answers/:id/reopen but for chores/tasks.
+app.patch('/api/chore-logs/:id/reopen', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const { dueAt } = req.body;
+  const result = await withDb((db) => {
+    const log = db.choreLogs.find((l) => l.id === id);
+    if (!log) return null;
+    if (log.status !== 'expired') return { error: '期限切れの報告のみ延長できます' };
+    const chore = db.chores.find((c) => c.id === log.choreId);
+    if (chore) chore.dueAt = normalizeDueAt(dueAt);
+    db.choreLogs = db.choreLogs.filter((l) => l.id !== id);
+    return { chore };
+  });
+  if (!result) return res.status(404).json({ error: '見つかりません' });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+}));
+
+// Parent cancels the penalty already applied for an expired chore log,
+// refunding the deducted points. Leaves the log record (and chore deadline) as is.
+app.patch('/api/chore-logs/:id/cancel-penalty', ah(async (req, res) => {
+  const id = Number(req.params.id);
+  const result = await withDb((db) => {
+    const log = db.choreLogs.find((l) => l.id === id);
+    if (!log) return null;
+    if (log.status !== 'expired') return { error: '期限切れの報告のみ減点を取り消せます' };
+    if (log.pointsAwarded === 0) return { error: 'すでに減点は取り消されています' };
+    const child = db.children.find((c) => c.id === log.childId);
+    if (child) child.points -= log.pointsAwarded;
+    log.pointsAwarded = 0;
+    return { log, child };
+  });
+  if (!result) return res.status(404).json({ error: '見つかりません' });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json(result);
+}));
+
 app.listen(PORT, '0.0.0.0', () => {
   const nets = os.networkInterfaces();
   const addresses = [];

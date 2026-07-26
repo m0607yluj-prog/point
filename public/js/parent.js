@@ -558,16 +558,22 @@ async function gradeAnswer(id, correct) {
 let cachedResultsAnswers = [];
 let cachedResultsChildren = [];
 let cachedResultsQuestions = [];
+let cachedTaskResultsLogs = [];
+let cachedTaskResultsChores = [];
 
 async function loadResults() {
-  const [answers, children, questions] = await Promise.all([
+  const [answers, children, questions, choreLogs, chores] = await Promise.all([
     apiGet('/api/answers'),
     apiGet('/api/children'),
-    apiGet('/api/questions')
+    apiGet('/api/questions'),
+    apiGet('/api/chore-logs'),
+    apiGet('/api/chores')
   ]);
   cachedResultsAnswers = answers;
   cachedResultsChildren = children;
   cachedResultsQuestions = questions;
+  cachedTaskResultsLogs = choreLogs;
+  cachedTaskResultsChores = chores;
 
   const sel = document.getElementById('results-filter-child');
   const current = sel.value;
@@ -575,7 +581,14 @@ async function loadResults() {
     children.map((c) => `<option value="${c.id}">${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
   sel.value = current;
 
+  const taskSel = document.getElementById('task-results-filter-child');
+  const taskCurrent = taskSel.value;
+  taskSel.innerHTML = '<option value="">こども: すべて</option>' +
+    children.map((c) => `<option value="${c.id}">${escapeHtml(c.avatar)} ${escapeHtml(c.name)}</option>`).join('');
+  taskSel.value = taskCurrent;
+
   renderResultsList();
+  renderTaskResultsList();
 }
 
 function renderResultsList() {
@@ -663,6 +676,80 @@ async function cancelPenalty(id) {
   if (!ok) return;
   try {
     await apiPatch(`/api/answers/${id}/cancel-penalty`, {});
+    showToast('減点を取り消しました');
+    loadResults();
+  } catch (e) { showToast(e.message); }
+}
+
+const TASK_RESULT_CATEGORY_LABELS = { household: 'お手伝い', study: '勉強タスク', bonus: 'ボーナス', goal: '目標タスク' };
+
+function renderTaskResultsList() {
+  const childFilter = document.getElementById('task-results-filter-child').value;
+  const statusFilter = document.getElementById('task-results-filter-status').value;
+  const el = document.getElementById('task-results-list');
+
+  let logs = cachedTaskResultsLogs;
+  if (childFilter) logs = logs.filter((l) => l.childId === Number(childFilter));
+  if (statusFilter) logs = logs.filter((l) => l.status === statusFilter);
+
+  if (logs.length === 0) {
+    el.innerHTML = '<p class="muted">条件に一致する報告がありません。</p>';
+    return;
+  }
+
+  const sorted = [...logs].sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
+  el.innerHTML = sorted.map((l) => {
+    const child = cachedResultsChildren.find((c) => c.id === l.childId) || { name: '(不明)' };
+    const chore = cachedTaskResultsChores.find((c) => c.id === l.choreId);
+    const catLabel = chore ? TASK_RESULT_CATEGORY_LABELS[chore.category || 'household'] : '';
+    const statusLabel = l.status === 'pending' ? '承認待ち'
+      : l.status === 'approved' ? (l.levelLabel || '完了')
+      : l.status === 'period_penalty' ? `目標未達成 (${l.completedCount}/${l.targetCount}回)`
+      : l.status === 'expired' ? '期限切れ'
+      : 'やり直し';
+    const badgeClass = l.status === 'pending' ? 'pending'
+      : l.status === 'approved' ? 'correct'
+      : (l.status === 'period_penalty' || l.status === 'expired') ? 'expired'
+      : 'incorrect';
+    const countLabel = l.count > 1 ? `${l.count}回分 ` : '';
+    const date = new Date(l.reportedAt).toLocaleString('ja-JP');
+    const actionButtons = l.status === 'expired'
+      ? `<div class="btn-row">
+          <input type="datetime-local" id="task-reopen-due-${l.id}" value="${toLocalDateTimeValue(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString())}" style="width:auto;" />
+          <button class="btn green small" onclick="reopenChoreLog(${l.id})">期限延長して報告できるようにする</button>
+          ${l.pointsAwarded !== 0 ? `<button class="btn pink small" onclick="cancelChorePenalty(${l.id})">減点を取り消す</button>` : ''}
+        </div>`
+      : '';
+    return `
+      <div class="list-item">
+        <div class="row-between">
+          <span>${escapeHtml(child.name)}: ${catLabel ? `[${catLabel}] ` : ''}${escapeHtml(l.choreName)}</span>
+          <span class="badge ${badgeClass}">${countLabel}${escapeHtml(statusLabel)}${l.pointsAwarded ? ` ${l.pointsAwarded > 0 ? '+' : ''}${l.pointsAwarded}P` : ''}</span>
+        </div>
+        <div class="muted">${date}</div>
+        ${actionButtons}
+      </div>
+    `;
+  }).join('');
+}
+
+async function reopenChoreLog(id) {
+  const dueAt = document.getElementById(`task-reopen-due-${id}`).value;
+  if (!dueAt) { showToast('新しい期限を入力してください'); return; }
+  const ok = await askConfirm('期限を延長して、もう一度報告できるようにしますか？');
+  if (!ok) return;
+  try {
+    await apiPatch(`/api/chore-logs/${id}/reopen`, { dueAt });
+    showToast('期限を延長しました');
+    loadResults();
+  } catch (e) { showToast(e.message); }
+}
+
+async function cancelChorePenalty(id) {
+  const ok = await askConfirm('この減点を取り消してポイントを戻しますか？');
+  if (!ok) return;
+  try {
+    await apiPatch(`/api/chore-logs/${id}/cancel-penalty`, {});
     showToast('減点を取り消しました');
     loadResults();
   } catch (e) { showToast(e.message); }

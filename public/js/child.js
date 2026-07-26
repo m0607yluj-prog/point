@@ -4,6 +4,7 @@ let allAnswers = [];
 let allRewards = [];
 let allChores = [];
 let allChoreLogs = [];
+let dueSoonNoticeShown = false;
 
 function getTokenFromUrl() {
   return new URLSearchParams(window.location.search).get('token');
@@ -71,6 +72,71 @@ async function refreshAll() {
   renderChores();
   renderResults();
   renderRewards();
+
+  if (!dueSoonNoticeShown) {
+    const dueSoon = findDueSoonItems();
+    if (dueSoon.length > 0) {
+      dueSoonNoticeShown = true;
+      showDueSoonNotice(dueSoon);
+    }
+  }
+}
+
+// Collects active questions and open adhoc tasks whose deadline falls within
+// the next 24 hours, so the child gets a heads-up before missing it.
+function findDueSoonItems() {
+  const nowMs = Date.now();
+  const soonMs = nowMs + 24 * 60 * 60 * 1000;
+  const items = [];
+
+  const answeredIds = new Set(allAnswers.map((a) => a.questionId));
+  allQuestions.forEach((q) => {
+    if (answeredIds.has(q.id)) return;
+    if (q.assignedChildId && q.assignedChildId !== currentChild.id) return;
+    if (!q.dueAt) return;
+    const dueMs = new Date(q.dueAt).getTime();
+    if (dueMs > nowMs && dueMs <= soonMs) {
+      items.push({ label: q.question, dueAt: q.dueAt, tab: 'quiz' });
+    }
+  });
+
+  allChores.forEach((c) => {
+    if (!c.active || c.type !== 'adhoc' || !c.dueAt) return;
+    if (c.assignedChildId && c.assignedChildId !== currentChild.id) return;
+    const already = allChoreLogs.some((l) => l.choreId === c.id && l.status !== 'rejected');
+    if (already) return;
+    const dueMs = new Date(c.dueAt).getTime();
+    if (dueMs > nowMs && dueMs <= soonMs) {
+      items.push({ label: c.name, dueAt: c.dueAt, tab: 'tasks', category: c.category || 'household' });
+    }
+  });
+
+  return items;
+}
+
+function showDueSoonNotice(items) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const listHtml = items.map((it) =>
+    `<li>${escapeHtml(it.label)}（期限: ${new Date(it.dueAt).toLocaleString('ja-JP')}）</li>`
+  ).join('');
+  overlay.innerHTML = `
+    <div class="card">
+      <h3>⏰ 期限が近いお知らせ</h3>
+      <p class="muted">1日以内に期限がくるものがあります。忘れずにやろう！</p>
+      <ul style="text-align:left; padding-left:20px;">${listHtml}</ul>
+      <div class="btn-row">
+        <button class="btn pink" id="due-soon-ok">確認した</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('due-soon-ok').onclick = () => {
+    document.body.removeChild(overlay);
+    const first = items[0];
+    showTab(first.tab);
+    if (first.tab === 'tasks' && first.category) showTaskCategory(first.category);
+  };
 }
 
 function showTab(tab) {

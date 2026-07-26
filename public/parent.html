@@ -176,6 +176,22 @@
         </div>
         <div id="results-list"></div>
       </div>
+      <div class="card">
+        <h3>タスク結果一覧</h3>
+        <p class="muted">全員分のお手伝い・勉強・ボーナス・目標タスクの報告結果を確認できます。</p>
+        <div class="btn-row">
+          <select id="task-results-filter-child" onchange="renderTaskResultsList()"><option value="">こども: すべて</option></select>
+          <select id="task-results-filter-status" onchange="renderTaskResultsList()">
+            <option value="">状態: すべて</option>
+            <option value="pending">承認待ち</option>
+            <option value="approved">完了</option>
+            <option value="rejected">やり直し</option>
+            <option value="expired">期限切れ</option>
+            <option value="period_penalty">目標未達成</option>
+          </select>
+        </div>
+        <div id="task-results-list"></div>
+      </div>
     </div>
 
     <div id="tab-tasks" class="tab-content hidden">
