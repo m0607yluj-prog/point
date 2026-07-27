@@ -11,7 +11,12 @@ function getTokenFromUrl() {
 }
 
 async function init() {
-  const token = getTokenFromUrl() || sessionStorage.getItem('childToken');
+  // localStorage (not sessionStorage) so the login survives the browser/app
+  // being backgrounded and reopened later — mobile Safari in particular can
+  // clear sessionStorage when a tab is suspended, which would otherwise strand
+  // a child with no way back into their account short of re-visiting their
+  // original link.
+  const token = getTokenFromUrl() || localStorage.getItem('childToken');
   if (!token) {
     showBlocked();
     return;
@@ -22,7 +27,7 @@ async function init() {
       showBlocked();
       return;
     }
-    sessionStorage.setItem('childToken', token);
+    localStorage.setItem('childToken', token);
     currentChild = child;
     await showMain();
   } catch (e) {
