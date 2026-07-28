@@ -28,6 +28,14 @@ body {
   padding: 20px 16px 80px;
 }
 
+.lockout-banner {
+  background: #e03131;
+  color: white;
+  font-weight: bold;
+  text-align: center;
+  padding: 10px 16px;
+}
+
 h1, h2, h3 { margin: 0 0 12px; }
 
 .title-bar {

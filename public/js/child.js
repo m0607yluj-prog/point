@@ -37,15 +37,7 @@ async function init() {
 
 function showBlocked() {
   document.getElementById('blocked-screen').classList.remove('hidden');
-  document.getElementById('locked-out-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.add('hidden');
-}
-
-function showLockedOut(points) {
-  document.getElementById('blocked-screen').classList.add('hidden');
-  document.getElementById('main-screen').classList.add('hidden');
-  document.getElementById('locked-out-screen').classList.remove('hidden');
-  document.getElementById('locked-points').textContent = `${points} P`;
 }
 
 async function showMain() {
@@ -59,13 +51,11 @@ async function refreshAll() {
   const children = await apiGet('/api/children');
   currentChild = children.find((c) => c.id === currentChild.id);
 
-  if (currentChild.points < 0) {
-    showLockedOut(currentChild.points);
-    return;
-  }
-  document.getElementById('locked-out-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.remove('hidden');
   document.getElementById('my-points').textContent = `${currentChild.points} P`;
+  // Negative points bans reward redemption (spending points you don't have)
+  // but questions/tasks stay usable — they're the only way to earn the way back out.
+  document.getElementById('lockout-banner').classList.toggle('hidden', currentChild.points >= 0);
 
   allQuestions = await apiGet('/api/questions?activeOnly=true');
   allAnswers = await apiGet(`/api/answers?childId=${currentChild.id}`);
@@ -430,6 +420,11 @@ function renderResults() {
 }
 
 function renderRewards() {
+  const isLocked = currentChild.points < 0;
+  document.getElementById('rewards-locked-notice').classList.toggle('hidden', !isLocked);
+  document.getElementById('rewards-available-content').classList.toggle('hidden', isLocked);
+  if (isLocked) return;
+
   const container = document.getElementById('reward-list');
   const active = allRewards.filter((r) => r.active);
   if (active.length === 0) {

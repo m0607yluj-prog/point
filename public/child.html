@@ -14,16 +14,6 @@
   <p style="text-align:center; margin-top:24px;"><a href="index.html">← トップにもどる</a></p>
 </div>
 
-<div id="locked-out-screen" class="hidden wrap" style="text-align:center; padding-top:60px;">
-  <h1 style="font-size:3rem;">📵</h1>
-  <h1>スマホ・タブレット禁止</h1>
-  <p>ポイントがマイナスになっています。</p>
-  <p class="points-display" id="locked-points" style="font-size:2rem;">0 P</p>
-  <p class="muted">お手伝いや問題を頑張って、ポイントを0以上に戻そう。</p>
-  <p class="muted">詳しくは保護者に相談してね。</p>
-  <div style="margin-top:24px;"><a href="index.html">← トップにもどる</a></div>
-</div>
-
 <div id="main-screen" class="hidden">
   <div class="title-bar">
     <h1><span id="my-avatar"></span> <span id="my-name"></span></h1>
@@ -31,6 +21,9 @@
       <span class="points-display" id="my-points" style="color:white;">0 P</span>
       <a class="btn small secondary" href="index.html">終了</a>
     </div>
+  </div>
+  <div id="lockout-banner" class="lockout-banner hidden">
+    📵 スマホ・タブレット禁止中：ポイントがマイナスです。問題やタスクを頑張ってプラスに戻そう！（ご褒美との交換はできません）
   </div>
   <div class="tabs">
     <button class="tab-btn active" data-tab="quiz" onclick="showTab('quiz')">📝 問題</button>
@@ -124,13 +117,18 @@
       <div id="results-list" class="card"></div>
     </div>
     <div id="tab-rewards" class="tab-content hidden">
-      <div class="card">
-        <h3>ポイントで交換しよう</h3>
-        <div id="reward-list" class="reward-grid"></div>
+      <div id="rewards-locked-notice" class="card hidden">
+        <p class="muted">ポイントがマイナスの間は、ご褒美と交換できません。問題やタスクを頑張ってポイントをプラスに戻そう。</p>
       </div>
-      <div class="card">
-        <h3>交換した記録</h3>
-        <div id="redemption-history"></div>
+      <div id="rewards-available-content">
+        <div class="card">
+          <h3>ポイントで交換しよう</h3>
+          <div id="reward-list" class="reward-grid"></div>
+        </div>
+        <div class="card">
+          <h3>交換した記録</h3>
+          <div id="redemption-history"></div>
+        </div>
       </div>
     </div>
   </div>
